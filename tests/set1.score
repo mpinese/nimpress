@@ -1,0 +1,11 @@
+Test PS
+Description of the test PS
+PMIDxxxxxx
+hs37d5
+1.234
+1	100	A	C	0.1	0.05
+1	150	A	G	0.2	0.3
+1	200	G	T	-0.4	0.1
+1	300	GA	CT	0.2	0.2
+2	400	T	C	0.3	0.01
+3	500	A	G	-0.9	0.01

@@ -357,9 +357,13 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
           ":" & $scoreEntry.refseq & ":" & $scoreEntry.easeq & 
           " cohort EAF is 0 in " & $nsamples & ".  This is highly unlikely " & 
           "given polygenic score EAF of " & $scoreEntry.eaf)
-    # Set all dosages to zero and return
+    # This variant is in the covered regions (or no coverage BED was supplied,
+    # in which case we assume it's covered), but is missing from the VCF.  The
+    # implication is that the locus is all homref. Set all dosages to homref and 
+    # return
+    let impute_dosage = if scoreEntry.refseq == scoreEntry.easeq: 2.0 else: 0.0
     for i in 0..dosages.high:
-      dosages[i] = 0.0
+      dosages[i] = impute_dosage
     return
 
   if $variant.FILTER != "." and $variant.FILTER != "PASS":

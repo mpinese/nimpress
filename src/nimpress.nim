@@ -1,4 +1,5 @@
 import logging
+import macros
 import math
 import strUtils
 
@@ -11,16 +12,27 @@ import hts
 ## Utility functions
 ################################################################################
 
+
+macro tpub*(x: untyped): untyped =
+  ## Marks a proc with an export asterisk when ``-d:testing`` is defined.
+  # From https://forum.nim-lang.org/t/3269
+  expectKind(x, RoutineNodes)
+  when defined(testing):
+    let n = name(x)
+    x.name = newTree(nnkPostfix, ident"*", n)
+  result = x
+
+
 proc isNaN(x:float): bool =
   result = x.classify == fcNaN
 
 
 proc tallyAlleles(rawDosages: seq[float]): (float, float, float) =
-  # Tally the alleles in rawDosages, as returned by getRawDosages.  Returns
-  # a tuple of three floats, with entries:
-  #   number of samples with genotype
-  #   number of samples missing genotype
-  #   total count of effect allele in genotyped samples.
+  ## Tally the alleles in rawDosages, as returned by getRawDosages.  Returns
+  ## a tuple of three floats, with entries:
+  ##   number of samples with genotype
+  ##   number of samples missing genotype
+  ##   total count of effect allele in genotyped samples.
   var ngenotyped = 0.0
   var nmissing = 0.0
   var neffectallele = 0.0
@@ -33,11 +45,51 @@ proc tallyAlleles(rawDosages: seq[float]): (float, float, float) =
   return (ngenotyped, nmissing, neffectallele)
 
 
-proc binomTest(x: int, n: int, p: float): float =
-  # Two-sided binomial test of observing x successes or more extreme in n 
-  # trials, given success probability of p.  Returns the p value.
-  # TODO: stub only atm
-  result = 1.0
+proc dbinom (x: int, n: int, p: float): float {.tpub.} = 
+  ## Pr(x successes in n trials | Pr(success) = p)
+  binom(n, x).toFloat * pow(p, x.toFloat) * pow(1.0-p, (n-x).toFloat)
+
+
+proc pbinom(x: int, n: int, p: float): float {.tpub.} =
+  ## Returns the lower tail binomial probability of x successes or fewer in n
+  ## trials, given a success probability of p: Pr(k <= x; n, p)
+  result = 0.0
+  for xi in 0..x:
+    result += dbinom(xi, n, p)
+
+
+proc binomTest(x: int, n: int, p: float): float {.tpub.} =
+  ## Two-sided binomial test of observing x successes or more extreme in n 
+  ## trials, given success probability of p.  Returns the p value.
+
+  # Edge cases
+  if p == 0.0:
+    return if x == 0: 1.0 else: 0.0
+  elif p == 1.0:
+    return if x == n: 1.0 else: 0.0
+
+  let
+    probx = dbinom(x, n, p)
+    expectedVal = n.toFloat*p
+
+  # Edge case again
+  if abs(x.toFloat / expectedVal - 1.0) < 1.0e-6:
+    return 1.0
+
+  # Find the Pr threshold by direct search, and use to evaluate the p value
+  # TODO: There's probably a more efficient implementation for large n. 
+  if x.toFloat < expectedVal:
+    var y = 0
+    for xi in expectedVal.ceil.toInt..n:
+      if dbinom(xi, n, p) <= probx * (1.0+1.0e-7):
+        y += 1
+    return pbinom(x, n, p) + (1.0 - pbinom(n - y, n, p))
+  else: # x > expectedVal
+    var y = 0
+    for xi in 0..(floor(expectedVal).toInt):
+      if dbinom(xi, n, p) <= probx * (1.0+1.0e-7):
+        y += 1
+    return pbinom(y - 1, n, p) + (1.0 - pbinom(x - 1, n, p))
 
 
 

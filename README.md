@@ -66,7 +66,7 @@ cohort, 0 < aaf <= 1.
 
 The polygenic score for sample `i` is calculated as:
 ```
-  score_i = (offset + sum_{j=1..m}(beta_j*dosage_ij)) / m
+  score_i = sum_{j=1..m}(beta_j*dosage_ij)/m + offset
 ```
 where `offset` is the offset as given in the header, `beta_j` is the beta for row `j` of the 
 polygenic score definition, `dosage_ij` is the dosage of the row `j` alt allele in sample `i`,

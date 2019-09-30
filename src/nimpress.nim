@@ -45,7 +45,7 @@ proc binomTest(x: int, n: int, p: float): float =
 ## Polygenic score file object
 ################################################################################
 
-type ScoreFile = object
+type ScoreFile* = object
   # Really rough polygenic score file definition, just to get something working.  
   # Current format is 5 header lines followed by 6-column TSV.  Header lines 
   # are:
@@ -56,9 +56,10 @@ type ScoreFile = object
   #   offset (string representation of float)
   # The subsequent TSV section is headerless, with one row per effect allele, 
   # columns:
-  #   chrom, pos, ref, alt, beta, af
-  # where beta is the PS coefficient and af the alt allele MAF in the source 
-  # population.
+  #   chrom, pos, ref, effectallele, beta, eaf
+  # where beta is the PS coefficient and eaf the effectallele MAF in the source 
+  # population.  effectallele may equal ref, in which case beta is the coefficient
+  # for reference allele dosage.
   #
   # In future this should be a 'real' format (tabix-compatible? Will need to be 
   # space efficient if genome-wide scores are on the table).  
@@ -75,12 +76,12 @@ type ScoreEntry = tuple
   contig: string
   pos: int
   refseq: string
-  altseq: string
+  easeq: string
   beta: float
-  aaf: float
+  eaf: float
 
 
-proc open(scoreFile: var ScoreFile, path: string): bool =
+proc open*(scoreFile: var ScoreFile, path: string): bool =
   # Open a ScoreFile
   scoreFile.fileobj = open(path)
   if scoreFile.fileobj.isNil:
@@ -120,35 +121,40 @@ proc isVariantCovered(scoreEntry:ScoreEntry, coveredBed:File): bool =
 ## VCF access: variant search and dosage querying
 ################################################################################
 
-proc findVariant(contig:string, pos:int, refseq:string, altseq:string, 
+proc findVariant(contig:string, pos:int, refseq:string, easeq:string, 
                  vcf:VCF): Variant =
-  # Find contig:pos:refseq:altseq in vcf.  Returns the
+  # Find contig:pos:refseq:easeq in vcf.  Returns the
   # whole VCF Variant if found, else nil.
   result = nil
   for variant in vcf.query(contig & ":" & $pos & "-" & $(pos + refseq.len - 1)):
     if variant.REF == refseq:
+      if easeq == refseq:
+        return variant
       for valt in variant.ALT:
-        if valt == altseq:
+        if valt == easeq:
           return variant
 
 
-proc getRawDosages(rawDosages: var seq[float], variant:Variant, altseq:string) =
-  # Get the dosages of altseq in the VCF Variant variant.  Returns
+proc getRawDosages(rawDosages: var seq[float], variant:Variant, easeq:string) =
+  # Get the dosages of easeq in the VCF Variant variant.  Returns
   # a sequence with values in {NaN, 0., 1., 2.}, being the dosage, or NaN
   # if no genotype is available.
   # TODO: Had trouble figuring out the best way to access the hts-nim API for
   # this.  Probably a much faster way to do it.  Not recreating the gts int32
   # seq each time seems like a good start.
-  let altidx = find(variant.ALT, altseq)    # index of the desired alt allele
+  let eaidx =
+    if easeq == variant.REF:
+      0
+    else:
+      find(variant.ALT, easeq) + 1    # index of the desired alt allele
+  doAssert eaidx >= 0
   var gts = newSeqUninitialized[int32](variant.n_samples)
 
   var i = 0
   for gt in genotypes(variant.format, gts):
     rawDosages[i] = 0.0
     for allele in gt:
-      # +1 as altidx is a 0-based index into the alts, but value(allele) has the
-      # first alt as 1.
-      if value(allele) == altidx + 1:
+      if value(allele) == eaidx:
         rawDosages[i] += 1
       elif value(allele) == -1:
         rawDosages[i] = NaN
@@ -171,8 +177,8 @@ proc getRawDosages(rawDosages: var seq[float], variant:Variant, altseq:string) =
 # int_fail  Impute with dosage calculated from non-missing samples in the cohort.
 #           At least --mincs non-missing samples must be available for this 
 #           method to be used, else it will fall back to fail.
-type ImputeMethodLocus {.pure.} = enum ps, homref, fail
-type ImputeMethodSample {.pure.} = enum ps, homref, fail, int_ps, int_fail
+type ImputeMethodLocus* {.pure.} = enum ps, homref, fail
+type ImputeMethodSample* {.pure.} = enum ps, homref, fail, int_ps, int_fail
 
 
 proc imputeLocusDosages(dosages: var seq[float], scoreEntry: ScoreEntry, 
@@ -184,7 +190,7 @@ proc imputeLocusDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
   # imputeMethodLocus: imputation method.
   let imputed_dosage = case imputeMethodLocus:
     of ImputeMethodLocus.ps:
-      scoreEntry.aaf*2.0
+      scoreEntry.eaf*2.0
     of ImputeMethodLocus.homref:
       0.0
     of ImputeMethodLocus.fail:
@@ -206,17 +212,20 @@ proc imputeSampleDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
   # imputeMethodSample: imputation method.
   let imputed_dosage = case imputeMethodSample:
     of ImputeMethodSample.ps:
-      scoreEntry.aaf*2.0
+      scoreEntry.eaf*2.0
     of ImputeMethodSample.homref:
-      0.0
+      if scoreEntry.refseq == scoreEntry.easeq:
+        2.0
+      else:
+        0.0
     of ImputeMethodSample.fail:
       NaN
     of ImputeMethodSample.int_ps, ImputeMethodSample.int_fail:
       if nGenotyped >= minGtForInternalImput.toFloat:
-        nEffectAllele / (2.0*nGenotyped)
+        nEffectAllele / nGenotyped
       else:
         if imputeMethodSample == ImputeMethodSample.int_ps:
-          scoreEntry.aaf*2.0
+          scoreEntry.eaf*2.0
         else:
           NaN
 
@@ -262,14 +271,14 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
     return
 
   let variant = findVariant(scoreEntry.contig, scoreEntry.pos, 
-                            scoreEntry.refseq, scoreEntry.altseq, genotypeVcf)
+                            scoreEntry.refseq, scoreEntry.easeq, genotypeVcf)
 
   if variant.isNil:
-    if binomTest(0, nsamples*2, scoreEntry.aaf) < afMismatchPthresh:
+    if binomTest(0, nsamples*2, scoreEntry.eaf) < afMismatchPthresh:
       log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos & 
-          ":" & $scoreEntry.refseq & ":" & $scoreEntry.altseq & 
-          " cohort AAF is 0 in " & $nsamples & ".  This is highly unlikely " & 
-          "given polygenic score AAF of " & $scoreEntry.aaf)
+          ":" & $scoreEntry.refseq & ":" & $scoreEntry.easeq & 
+          " cohort EAF is 0 in " & $nsamples & ".  This is highly unlikely " & 
+          "given polygenic score EAF of " & $scoreEntry.eaf)
     # Set all dosages to zero and return
     for i in 0..dosages.high:
       dosages[i] = 0.0
@@ -277,14 +286,14 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
 
   if $variant.FILTER != "." and $variant.FILTER != "PASS":
     log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos & ":" & 
-        $scoreEntry.refseq & ":" & $scoreEntry.altseq & 
+        $scoreEntry.refseq & ":" & $scoreEntry.easeq & 
         " has a FILTER flag set (value \"" & $variant.FILTER & "\").  " & 
         "Imputing all dosages at this locus.")
     imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
     return
 
   # Fetch the raw dosages (values in {NaN, 0., 1., 2.}) from the VCF.
-  getRawDosages(dosages, variant, scoreEntry.altseq)
+  getRawDosages(dosages, variant, scoreEntry.easeq)
 
   let (ngenotyped, nmissing, neffectallele) = tallyAlleles(dosages)
   
@@ -297,12 +306,12 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
     imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
     return
 
-  if binomTest(neffectallele.toInt, nsamples*2, scoreEntry.aaf) < afMismatchPthresh:
+  if binomTest(neffectallele.toInt, nsamples*2, scoreEntry.eaf) < afMismatchPthresh:
     log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos & 
-        ":" & $scoreEntry.refseq & ":" & $scoreEntry.altseq & 
-        " cohort AAF is " & $(neffectallele/(nsamples*2).toFloat) & 
+        ":" & $scoreEntry.refseq & ":" & $scoreEntry.easeq & 
+        " cohort EAF is " & $(neffectallele/(nsamples*2).toFloat) & 
         " in " & $nsamples & ".  This is highly unlikely given polygenic " &
-        "score AAF of " & $scoreEntry.aaf)
+        "score EAF of " & $scoreEntry.eaf)
 
   # Impute single missing sample dosages
   imputeSampleDosages(dosages, scoreEntry, neffectallele, ngenotyped, 
@@ -314,12 +323,12 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
 ## Polygenic score calculation
 ################################################################################
 
-proc computePolygenicScores(scores: var seq[float], scoreFile: ScoreFile, 
-                            genotypeVcf: VCF, coveredBed: File, 
-                            imputeMethodLocus: ImputeMethodLocus, 
-                            imputeMethodSample: ImputeMethodSample,
-                            maxMissingRate: float, afMismatchPthresh: float,
-                            minGtForInternalImput: int) =
+proc computePolygenicScores*(scores: var seq[float], scoreFile: ScoreFile, 
+                             genotypeVcf: VCF, coveredBed: File, 
+                             imputeMethodLocus: ImputeMethodLocus, 
+                             imputeMethodSample: ImputeMethodSample,
+                             maxMissingRate: float, afMismatchPthresh: float,
+                             minGtForInternalImput: int) =
   # Compute polygenic scores.
   #
   #   scores: seq[float] to which the scores will be written. Will be resized to
@@ -343,10 +352,10 @@ proc computePolygenicScores(scores: var seq[float], scoreFile: ScoreFile,
   #                          internal imputation to be applied.
   let nsamples = genotypeVcf.n_samples
 
-  # Initialise the scores to the offset term
+  # Initialise the scores to zero; offset will be added later
   scores.setLen(nsamples)
   for i in 0..scores.high:
-    scores[i] = scoreFile.offset
+    scores[i] = 0.0
 
   # Iterate over PS loci.  For each locus, get its (possibly imputed) dosages,
   # and add its score contribution to the accumulating scores.
@@ -363,6 +372,10 @@ proc computePolygenicScores(scores: var seq[float], scoreFile: ScoreFile,
   # Average over the PRS loci to match PLINK behaviour
   for i in 0..scores.high:
     scores[i] /= nloci.toFloat
+
+  # Add the offset
+  for i in 0..scores.high:
+    scores[i] += scoreFile.offset
 
 
 

@@ -110,8 +110,8 @@ type ScoreFile* = object
   # columns:
   #   chrom, pos, ref, effectallele, beta, eaf
   # where beta is the PS coefficient and eaf the effectallele MAF in the source 
-  # population.  effectallele may equal ref, in which case beta is the coefficient
-  # for reference allele dosage.
+  # population.  effectallele may equal ref, in which case beta is the 
+  # coefficient for reference allele dosage.
   #
   # In future this should be a 'real' format (tabix-compatible? Will need to be 
   # space efficient if genome-wide scores are on the table).  
@@ -223,10 +223,10 @@ proc getRawDosages(rawDosages: var seq[float], variant:Variant, easeq:string) =
 #           frequency.
 # homref    Impute to homozygous reference genotype.
 # fail      Do not impute, but fail. Failed samples will have a score of "nan"
-# int_ps    Impute with dosage calculated from non-missing samples in the cohort.
+# int_ps    Impute with dosage calculated from non-missing samples in the cohort
 #           At least --mincs non-missing samples must be available for this 
 #           method to be used, else it will fall back to ps.
-# int_fail  Impute with dosage calculated from non-missing samples in the cohort.
+# int_fail  Impute with dosage calculated from non-missing samples in the cohort
 #           At least --mincs non-missing samples must be available for this 
 #           method to be used, else it will fall back to fail.
 type ImputeMethodLocus* {.pure.} = enum ps, homref, fail
@@ -329,8 +329,8 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
     if binomTest(0, nsamples*2, scoreEntry.eaf) < afMismatchPthresh:
       log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos & 
           ":" & $scoreEntry.refseq & ":" & $scoreEntry.easeq & 
-          " cohort EAF is 0 in " & $nsamples & ".  This is highly unlikely " & 
-          "given polygenic score EAF of " & $scoreEntry.eaf)
+          " cohort EAF is 0 in " & $nsamples & " samples.  This is highly" &
+          " unlikely given polygenic score EAF of " & $scoreEntry.eaf)
     # Set all dosages to zero and return
     for i in 0..dosages.high:
       dosages[i] = 0.0
@@ -358,11 +358,11 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
     imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
     return
 
-  if binomTest(neffectallele.toInt, nsamples*2, scoreEntry.eaf) < afMismatchPthresh:
+  if binomTest(neffectallele.toInt, (nsamples-nmissing.toInt)*2, scoreEntry.eaf) < afMismatchPthresh:
     log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos & 
-        ":" & $scoreEntry.refseq & ":" & $scoreEntry.easeq & 
-        " cohort EAF is " & $(neffectallele/(nsamples*2).toFloat) & 
-        " in " & $nsamples & ".  This is highly unlikely given polygenic " &
+        ":" & $scoreEntry.refseq & ":" & $scoreEntry.easeq & " cohort EAF is " &
+        $(neffectallele/((nsamples-nmissing.toInt)*2).toFloat) & " in " & 
+        $nsamples & " samples.  This is highly unlikely given polygenic " &
         "score EAF of " & $scoreEntry.eaf)
 
   # Impute single missing sample dosages
@@ -494,12 +494,15 @@ proc main() =
 
   if not open(genotypeVcf, $args["<genotypes.vcf>"]):
     log(lvlFatal, "Could not open input VCF file " & $args["<genotypes.vcf>"])
+    quit(-1)
 
   if not open(scoreFile, $args["<scoredef>"]):
     log(lvlFatal, "Could not open polygenic score file " & $args["<scoredef>"])
+    quit(-1)
 
   if args["--cov"]:
     log(lvlFatal, "Coverage BED currently not supported.")
+    quit(-2)
 
   var scores = newSeqUninitialized[float](0)   # Will be resized as needed
   computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 

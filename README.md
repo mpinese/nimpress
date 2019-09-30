@@ -73,14 +73,12 @@ polygenic score definition, `dosage_ij` is the dosage of the row `j` alt allele 
 and `m` is the number of alleles (rows) in the polygenic score.  `dosage_ij` may be imputed.
 
 # Limitations
-* Currently the coverage BED file is ignored.
 * Allele frequency mismatch tests are not yet implemented.
 * Currently has diploid-specific logic.
 * Does not fully handle multi-allelic risk loci (specifically, loci at which more than one allele has a nonzero beta are not supported)
 * Performs only simple allele matching. As the representation of some variants in VCF is not unique, this may lead to polygenic score variants being imputed even if they are present in the VCF.
 
 # Future
-* Coverage BED handling
 * Option to calculate soft PS based on genotype likelihoods (VCF PL field)
 * Full multi-allelic locus handling (will require imputation to a distribution over dosages of all alleles, instead of just the effect allele)
 * Smarter variant matching.

@@ -214,12 +214,15 @@ proc imputeSampleDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
     of ImputeMethodSample.ps:
       scoreEntry.eaf*2.0
     of ImputeMethodSample.homref:
-      0.0
+      if scoreEntry.refseq == scoreEntry.easeq:
+        2.0
+      else:
+        0.0
     of ImputeMethodSample.fail:
       NaN
     of ImputeMethodSample.int_ps, ImputeMethodSample.int_fail:
       if nGenotyped >= minGtForInternalImput.toFloat:
-        nEffectAllele / (2.0*nGenotyped)
+        nEffectAllele / nGenotyped
       else:
         if imputeMethodSample == ImputeMethodSample.int_ps:
           scoreEntry.eaf*2.0
@@ -349,10 +352,10 @@ proc computePolygenicScores*(scores: var seq[float], scoreFile: ScoreFile,
   #                          internal imputation to be applied.
   let nsamples = genotypeVcf.n_samples
 
-  # Initialise the scores to the offset term
+  # Initialise the scores to zero; offset will be added later
   scores.setLen(nsamples)
   for i in 0..scores.high:
-    scores[i] = scoreFile.offset
+    scores[i] = 0.0
 
   # Iterate over PS loci.  For each locus, get its (possibly imputed) dosages,
   # and add its score contribution to the accumulating scores.
@@ -369,6 +372,10 @@ proc computePolygenicScores*(scores: var seq[float], scoreFile: ScoreFile,
   # Average over the PRS loci to match PLINK behaviour
   for i in 0..scores.high:
     scores[i] /= nloci.toFloat
+
+  # Add the offset
+  for i in 0..scores.high:
+    scores[i] += scoreFile.offset
 
 
 

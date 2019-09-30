@@ -1,7 +1,32 @@
+import math
 import unittest
 
-include nimpress
+import hts
 
+import nimpress
+
+
+proc isNaN(x:float): bool =
+  result = x.classify == fcNaN
+
+
+proc checkFloats(x: seq[float], target: seq[float]): bool = 
+  result = true
+  if x.len != target.len:
+    result = false
+  else:
+    for i in 0..target.high:
+      if target[i].isNaN != x[i].isNaN:
+        result = false
+        break
+      if target[i].isNaN == false:
+        if abs(target[i] - x[i]) > 1e-4:
+          result = false
+          break
+  if result == false:
+    echo("checkFloats failed. Target: " & $target & " != value : " & $x)
+  else:
+    echo("checkFloats PASS")
 
 
 suite "set1":
@@ -14,194 +39,112 @@ suite "set1":
     discard open(scoreFile, "tests/set1.score")
 
 
-  test "Locus:ps Sample:fail":
+  test "Locus:ps_MMR1 Sample:fail":
     computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
                            ImputeMethodLocus.ps,
                            ImputeMethodSample.fail,
                            maxMissingRate = 1.0,
                            afMismatchPthresh = 1.0, 
                            minGtForInternalImput = 100)
-    check(scores == @[NaN, 0.142333333, NaN, NaN, NaN, NaN])
+    check(checkFloats(scores, @[NaN, 0.093, NaN, NaN, NaN, NaN]))
 
+
+  test "Locus:ps_MMR.2 Sample:fail":
     computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
                            ImputeMethodLocus.ps, 
                            ImputeMethodSample.fail,
                            maxMissingRate = 0.2, 
                            afMismatchPthresh = 1.0, 
                            minGtForInternalImput = 100)
-    check(scores == @[0.076666667, 0.143333333, 0.093333333, NaN, NaN, -0.04])
+    check(checkFloats(scores, @[0.0273333333333333, 0.094, NaN, NaN, NaN, -0.156]))
 
 
-  test "Locus:ps Sample:homref":
+  test "Locus:ps_MMR1 Sample:homref":
     computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
                            ImputeMethodLocus.ps, 
                            ImputeMethodSample.homref,
-                           maxMissingRate = 1.0, 
+                           maxMissingRate = 0.2, 
                            afMismatchPthresh = 1.0, 
                            minGtForInternalImput = 100)
-    check(scores == @[0.075666667, 0.142333333, 0.092333333, 0.242333333, -0.074333333, -0.041])
+    check(checkFloats(scores, @[0.0273333333333333, 0.094, 0.0273333333333333, 0.160666666666667, -0.122666666666667, -0.156]))
 
 
-  test "Locus:ps Sample:int_ps":
+  test "Locus:ps Sample:int3_ps":
     computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
                            ImputeMethodLocus.ps, 
                            ImputeMethodSample.int_ps,
                            maxMissingRate = 1.0, 
                            afMismatchPthresh = 1.0, 
                            minGtForInternalImput = 3)
-    check(scores == @[0.076666667, 0.142333333, 0.093333333, 0.033333333, -0.06, -0.04])
+    check(checkFloats(scores, @[0.0273333333333333, 0.093, 0.0173333333333333, -0.0493333333333333, -0.109333333333333, -0.156]))
 
+
+  test "Locus:ps Sample:int100_ps":
     computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
                            ImputeMethodLocus.ps, 
                            ImputeMethodSample.int_ps,
                            maxMissingRate = 1.0, 
                            afMismatchPthresh = 1.0, 
                            minGtForInternalImput = 100)
-    check(scores == @[0.076666667, 0.142333333, 0.093333333, 0.240333333, -0.072666667, -0.04])
+    check(checkFloats(scores, @[0.0273333333333333, 0.093, 0.0256666666666667, 0.157666666666667, -0.109333333333333, -0.156]))
 
 
-  test "Locus:ps Sample:int_fail":
+  test "Locus:ps Sample:int100_fail":
     computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
                            ImputeMethodLocus.ps, 
                            ImputeMethodSample.int_fail,
                            maxMissingRate = 1.0, 
                            afMismatchPthresh = 1.0, 
                            minGtForInternalImput = 100)
-    check(scores == @[0.076666667, 0.142333333, 0.093333333, NaN, NaN, -0.04])
+    check(checkFloats(scores, @[NaN, 0.093, NaN, NaN, NaN, NaN]))
 
 
-
-  test "Locus:homref Sample:fail":
+  test "Locus:homref_MMR1 Sample:fail":
     computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
-                           ImputeMethodLocus.ps,
+                           ImputeMethodLocus.homref,
                            ImputeMethodSample.fail,
                            maxMissingRate = 1.0,
                            afMismatchPthresh = 1.0, 
                            minGtForInternalImput = 100)
-    check(scores == @[NaN, 0.122333333, NaN, NaN, NaN, NaN])
+    check(checkFloats(scores, @[NaN, 0.073, NaN, NaN, NaN, NaN]))
 
+
+  test "Locus:homref_MMR.2 Sample:fail":
     computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
-                           ImputeMethodLocus.ps, 
+                           ImputeMethodLocus.homref, 
                            ImputeMethodSample.fail,
                            maxMissingRate = 0.2, 
                            afMismatchPthresh = 1.0, 
                            minGtForInternalImput = 100)
-    check(scores == @[0.055666667, 0.122333333, 0.072333333, NaN, NaN, -0.061])
+    check(checkFloats(scores, @[0.00633333333333334, 0.073, NaN, NaN, NaN, -0.177]))
 
 
-  test "Locus:homref Sample:homref":
+  test "Locus:homref_MMR1 Sample:homref":
     computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
-                           ImputeMethodLocus.ps, 
+                           ImputeMethodLocus.homref, 
                            ImputeMethodSample.homref,
                            maxMissingRate = 1.0, 
                            afMismatchPthresh = 1.0, 
                            minGtForInternalImput = 100)
-    check(scores == @[0.055666667, 0.122333333, 0.072333333, 0.222333333, -0.094333333, -0.061])
+    check(checkFloats(scores, @[0.00633333333333334, 0.073, 0.00633333333333334, 0.139666666666667, -0.143666666666667, -0.177]))
 
 
-  test "Locus:homref Sample:int_ps":
+  test "Locus:fail_MMR1 Sample:fail":
     computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
-                           ImputeMethodLocus.ps, 
-                           ImputeMethodSample.int_ps,
-                           maxMissingRate = 1.0, 
-                           afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 3)
-    check(scores == @[0.056666667, 0.122333333, 0.073333333, 0.013333333, -0.08, -0.06])
-
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
-                           ImputeMethodLocus.ps, 
-                           ImputeMethodSample.int_ps,
-                           maxMissingRate = 1.0, 
-                           afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(scores == @[0.056666667, 0.122333333, 0.073333333, 0.220333333, -0.08, -0.06])
-
-
-  test "Locus:homref Sample:int_fail":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
-                           ImputeMethodLocus.ps, 
-                           ImputeMethodSample.int_fail,
-                           maxMissingRate = 1.0, 
-                           afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(scores == @[NaN, 0.122333333, NaN, NaN, NaN, NaN])
-
-
-
-  test "Locus:fail Sample:fail":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
-                           ImputeMethodLocus.ps,
+                           ImputeMethodLocus.fail,
                            ImputeMethodSample.fail,
                            maxMissingRate = 1.0,
                            afMismatchPthresh = 1.0, 
                            minGtForInternalImput = 100)
-    check(scores == @[NaN, NaN, NaN, NaN, NaN, NaN])
+    check(checkFloats(scores, @[NaN, NaN, NaN, NaN, NaN, NaN]))
 
+
+  test "Locus:fail_MMR.2 Sample:fail":
     computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
-                           ImputeMethodLocus.ps, 
+                           ImputeMethodLocus.fail, 
                            ImputeMethodSample.fail,
                            maxMissingRate = 0.2, 
                            afMismatchPthresh = 1.0, 
                            minGtForInternalImput = 100)
-    check(scores == @[NaN, NaN, NaN, NaN, NaN, NaN])
+    check(checkFloats(scores, @[NaN, NaN, NaN, NaN, NaN, NaN]))
 
-
-  test "Locus:fail Sample:homref":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
-                           ImputeMethodLocus.ps, 
-                           ImputeMethodSample.homref,
-                           maxMissingRate = 1.0, 
-                           afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(scores == @[NaN, NaN, NaN, NaN, NaN, NaN])
-
-
-  test "Locus:fail Sample:int_ps":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
-                           ImputeMethodLocus.ps, 
-                           ImputeMethodSample.int_ps,
-                           maxMissingRate = 1.0, 
-                           afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 3)
-    check(scores == @[NaN, NaN, NaN, NaN, NaN, NaN])
-
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
-                           ImputeMethodLocus.ps, 
-                           ImputeMethodSample.int_ps,
-                           maxMissingRate = 1.0, 
-                           afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(scores == @[NaN, NaN, NaN, NaN, NaN, NaN])
-
-
-  test "Locus:fail Sample:int_fail":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
-                           ImputeMethodLocus.ps, 
-                           ImputeMethodSample.int_fail,
-                           maxMissingRate = 1.0, 
-                           afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(scores == @[NaN, NaN, NaN, NaN, NaN, NaN])
-
-
-
-# ./nimpress --maxmis=1 --imp-locus=ps --imp-sample=fail tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=0.2 --imp-locus=ps --imp-sample=fail tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=1 --imp-locus=ps --imp-sample=homref tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=1 --mincs=3 --imp-locus=ps --imp-sample=int_ps tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=1 --mincs=100 --imp-locus=ps --imp-sample=int_ps tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=1 --mincs=3 --imp-locus=ps --imp-sample=int_fail tests/set1.score tests/set1.vcf.gz
-
-# ./nimpress --maxmis=1 --imp-locus=homref --imp-sample=fail tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=0.2 --imp-locus=homref --imp-sample=fail tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=1 --imp-locus=homref --imp-sample=homref tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=1 --mincs=3 --imp-locus=homref --imp-sample=int_ps tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=1 --mincs=100 --imp-locus=homref --imp-sample=int_ps tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=1 --mincs=3 --imp-locus=homref --imp-sample=int_fail tests/set1.score tests/set1.vcf.gz
-
-# ./nimpress --maxmis=1 --imp-locus=fail --imp-sample=fail tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=0.2 --imp-locus=fail --imp-sample=fail tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=1 --imp-locus=fail --imp-sample=homref tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=1 --mincs=3 --imp-locus=fail --imp-sample=int_ps tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=1 --mincs=100 --imp-locus=fail --imp-sample=int_ps tests/set1.score tests/set1.vcf.gz
-# ./nimpress --maxmis=1 --mincs=3 --imp-locus=fail --imp-sample=int_fail tests/set1.score tests/set1.vcf.gz

@@ -74,7 +74,6 @@ and `m` is the number of alleles (rows) in the polygenic score.  `dosage_ij` may
 
 # Limitations
 * Currently the coverage BED file is ignored.
-* Allele frequency mismatch tests are not yet implemented.
 * Currently has diploid-specific logic.
 * Does not fully handle multi-allelic risk loci (specifically, loci at which more than one allele has a nonzero beta are not supported)
 * Performs only simple allele matching. As the representation of some variants in VCF is not unique, this may lead to polygenic score variants being imputed even if they are present in the VCF.

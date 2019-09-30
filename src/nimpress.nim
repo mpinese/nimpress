@@ -158,9 +158,6 @@ proc loadBedIntervals*(ivals: var GenomeIntervals, path: string): bool =
   return true
 
 
-# Returns true if [scoreEntry.chrom:scoreEntry.pos, 
-# (scoreEntry.pos+scoreEntry.ref.len-1) is entirely in an interval of 
-# coveredIvals, else false.
 proc isVariantCovered(scoreEntry:ScoreEntry, coveredIvals:GenomeIntervals): bool =
   # Tests for whether the variant in scoreEntry falls within an interval in
   # coveredIvals.  coveredIvals contains half-open 0-based intervals, as per the

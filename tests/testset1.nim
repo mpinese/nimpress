@@ -1,4 +1,5 @@
 import math
+import sequtils
 import unittest
 
 import hts
@@ -11,36 +12,28 @@ proc isNaN(x:float): bool =
 
 
 proc checkFloats(x: seq[float], target: seq[float]): bool = 
-  result = true
   if x.len != target.len:
-    result = false
-  else:
-    for i in 0..target.high:
-      if target[i].isNaN != x[i].isNaN:
-        result = false
-        break
-      if target[i].isNaN == false:
-        if abs(target[i] - x[i]) > 1e-4:
-          result = false
-          break
-  if result == false:
-    echo("checkFloats failed. Target: " & $target & " != value : " & $x)
-  else:
-    echo("checkFloats PASS")
+    return false
+  for (xi, ti) in zip(x, target):
+      if ti.isNaN != xi.isNaN:
+        return false
+      if ti.isNaN == false and abs(ti - xi) > 1e-4:
+        return false
+  return true
 
 
 suite "set1":
   setup:
     var genotypeVcf:VCF
     var scoreFile:ScoreFile
-    var coveredBed:File
+    var coveredBed:GenomeIntervals
     var scores = newSeqUninitialized[float](0)
     discard open(genotypeVcf, "tests/set1.vcf.gz")
     discard open(scoreFile, "tests/set1.score")
 
 
   test "Locus:ps_MMR1 Sample:fail":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
+    computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.ps,
                            ImputeMethodSample.fail,
                            maxMissingRate = 1.0,
@@ -50,7 +43,7 @@ suite "set1":
 
 
   test "Locus:ps_MMR.2 Sample:fail":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
+    computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.ps, 
                            ImputeMethodSample.fail,
                            maxMissingRate = 0.2, 
@@ -60,7 +53,7 @@ suite "set1":
 
 
   test "Locus:ps_MMR1 Sample:homref":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
+    computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.ps, 
                            ImputeMethodSample.homref,
                            maxMissingRate = 0.2, 
@@ -69,8 +62,8 @@ suite "set1":
     check(checkFloats(scores, @[0.0273333333333333, 0.094, 0.0273333333333333, 0.160666666666667, -0.122666666666667, -0.156]))
 
 
-  test "Locus:ps Sample:int3_ps":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
+  test "Locus:ps_MMR1 Sample:int3_ps":
+    computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.ps, 
                            ImputeMethodSample.int_ps,
                            maxMissingRate = 1.0, 
@@ -79,8 +72,8 @@ suite "set1":
     check(checkFloats(scores, @[0.0273333333333333, 0.093, 0.0173333333333333, -0.0493333333333333, -0.109333333333333, -0.156]))
 
 
-  test "Locus:ps Sample:int100_ps":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
+  test "Locus:ps_MMR1 Sample:int100_ps":
+    computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.ps, 
                            ImputeMethodSample.int_ps,
                            maxMissingRate = 1.0, 
@@ -89,8 +82,8 @@ suite "set1":
     check(checkFloats(scores, @[0.0273333333333333, 0.093, 0.0256666666666667, 0.157666666666667, -0.109333333333333, -0.156]))
 
 
-  test "Locus:ps Sample:int100_fail":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
+  test "Locus:ps_MMR1 Sample:int100_fail":
+    computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.ps, 
                            ImputeMethodSample.int_fail,
                            maxMissingRate = 1.0, 
@@ -100,7 +93,7 @@ suite "set1":
 
 
   test "Locus:homref_MMR1 Sample:fail":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
+    computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.homref,
                            ImputeMethodSample.fail,
                            maxMissingRate = 1.0,
@@ -110,7 +103,7 @@ suite "set1":
 
 
   test "Locus:homref_MMR.2 Sample:fail":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
+    computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.homref, 
                            ImputeMethodSample.fail,
                            maxMissingRate = 0.2, 
@@ -120,7 +113,7 @@ suite "set1":
 
 
   test "Locus:homref_MMR1 Sample:homref":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
+    computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.homref, 
                            ImputeMethodSample.homref,
                            maxMissingRate = 1.0, 
@@ -130,7 +123,7 @@ suite "set1":
 
 
   test "Locus:fail_MMR1 Sample:fail":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
+    computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.fail,
                            ImputeMethodSample.fail,
                            maxMissingRate = 1.0,
@@ -140,7 +133,7 @@ suite "set1":
 
 
   test "Locus:fail_MMR.2 Sample:fail":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
+    computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.fail, 
                            ImputeMethodSample.fail,
                            maxMissingRate = 0.2, 

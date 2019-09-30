@@ -1,9 +1,11 @@
 import logging
 import math
 import strUtils
+import tables
 
 import docopt
 import hts
+import lapper
 
 
 
@@ -109,11 +111,87 @@ iterator items(scoreFile: ScoreFile): ScoreEntry =
 ## Handling of well-genotyped regions
 ################################################################################
 
-# TODO: Replace with a real interval search, returning true if 
-# scoreEntry.chrom:scoreEntry.pos-(scoreEntry.pos+scoreEntry.ref.len-1) 
-# is entirely in an interval of coveredBed, else false.
-proc isVariantCovered(scoreEntry:ScoreEntry, coveredBed:File): bool =
+type ContigInterval = ref object
+  start: int
+  stop: int
+
+proc start(ival: ContigInterval): int = return ival.start
+proc stop(ival: ContigInterval): int = return ival.stop
+proc `$`(ival: ContigInterval): string = return "[$#,$#)" % [$ival.start, $ival.stop]
+
+
+type GenomeIntervals* = object
+  init: bool
+  contigIntervalsIndex: Table[string, Lapper[ContigInterval]]
+  contigIntervals: Table[string, seq[ContigInterval]]
+
+
+proc loadBedIntervals*(ivals: var GenomeIntervals, path: string): bool = 
+  # Load a BED file in path into the ivals object. On success, all ivals data
+  # will be replaced with the BED file intervals.  Returns true on success, 
+  # else false.  If the load fails (return value false), ivals will not be 
+  # changed.
+  let infile = open(path)
+  if infile.isNil:
+    return false
+
+  # Clear any existing intervals, and load the BED ones
+  ivals.init = false
+  ivals.contigIntervalsIndex.clear()
+  ivals.contigIntervals.clear()
+  for line in infile.lines:
+    let lineparts = line.strip(leading = false).split('\t')
+    doAssert lineparts.len >= 3
+    let
+      chrom = lineparts[0]
+      start0 = lineparts[1]
+      end1 = lineparts[2]
+    if not ivals.contigIntervals.hasKey(chrom):
+      ivals.contigIntervals[chrom] = @[]
+    ivals.contigIntervals[chrom].add(ContigInterval(start:start0.parseInt, stop:end1.parseInt))
+
+  # Add lapper indices
+  for chrom in ivals.contigIntervals.keys:
+    ivals.contigIntervalsIndex[chrom] = lapify(ivals.contigIntervals[chrom])
+
+  ivals.init = true
   return true
+
+
+# Returns true if [scoreEntry.chrom:scoreEntry.pos, 
+# (scoreEntry.pos+scoreEntry.ref.len-1) is entirely in an interval of 
+# coveredIvals, else false.
+proc isVariantCovered(scoreEntry:ScoreEntry, coveredIvals:GenomeIntervals): bool =
+  # Tests for whether the variant in scoreEntry falls within an interval in
+  # coveredIvals.  coveredIvals contains half-open 0-based intervals, as per the
+  # BED format.  scoreEntry.pos is in 1-based format, as per VCF. If 
+  # coveredIvals is not initalised (coveredIvals.init == false), always returns
+  # false.
+  #
+  # Return value:
+  #   true if scoreEntry falls entirely within at least one coveredIvals 
+  #     interval,
+  #   else false. 
+  if not coveredIvals.contigIntervalsIndex.hasKey(scoreEntry.contig):
+    log(lvlWarn, "Contig " & scoreEntry.contig & " not present within the " &
+        "coverage BED file.")
+    return false    # The whole contig is missing from coveredIvals.
+
+  # Get all overlapping intervals. Note the -1 to convert from 1-based inclusive
+  # VCF pos to BED half-open intervals
+  var ivs = new_seq[ContigInterval]()
+  var contigLapper = coveredIvals.contigIntervalsIndex[scoreEntry.contig]
+  let anyfound = contigLapper.find(scoreEntry.pos-1, 
+                                   scoreEntry.pos+scoreEntry.refseq.len, ivs)
+  if not anyfound:
+    return false
+
+  # At least one overlapping interval was found. Loop over each to confirm the
+  # variant falls entirely within the interval.
+  for ci in ivs:
+    if ci.start < scoreEntry.pos and ci.stop >= scoreEntry.pos+scoreEntry.refseq.len-1:
+      return true
+  return false
 
 
 
@@ -235,7 +313,8 @@ proc imputeSampleDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
 
 
 proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry, 
-                       genotypeVcf: VCF, coveredBed: File,  
+                       genotypeVcf: VCF, restrictToCoveredRgns: bool,
+                       coveredIvals: GenomeIntervals,  
                        imputeMethodLocus: ImputeMethodLocus, 
                        imputeMethodSample: ImputeMethodSample,
                        maxMissingRate: float, afMismatchPthresh: float,
@@ -245,9 +324,11 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
   #
   #   dosages: destination seq to which imputed dosages will be written.
   #   scoreEntry: the polygenic score entry corresponding to this locus.
-  #   coveredBed: object containing genome regions which have been well-called
+  #   restrictToCoveredRgns: true if analysis should be restricted to 
+  #                          well-called regions in coveredIvals; false to 
+  #                          consider all loci to be well-covered.
+  #   coveredIvals: object containing genome regions which have been well-called
   #               (covered) by the genotyping method.
-  #               TODO: Not implemented yet
   #   imputeMethodLocus: Imputation method to use when a whole locus fails or
   #                      is missing / not covered.
   #   imputeMethodSample: Imputation method to use for individual samples with
@@ -262,7 +343,7 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
   let nsamples = genotypeVcf.n_samples
   dosages.setLen(nsamples)
 
-  if not isVariantCovered(scoreEntry, coveredBed):
+  if restrictToCoveredRgns and not isVariantCovered(scoreEntry, coveredIvals):
     log(lvlWarn, "Locus " & scoreEntry.contig & ":" & $scoreEntry.pos & "-" & 
         $(scoreEntry.pos + scoreEntry.refseq.len - 1) & 
         " is not covered by the sequence coverage BED.  Imputing all dosages " &
@@ -324,7 +405,8 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
 ################################################################################
 
 proc computePolygenicScores*(scores: var seq[float], scoreFile: ScoreFile, 
-                             genotypeVcf: VCF, coveredBed: File, 
+                             genotypeVcf: VCF, restrictToCoveredRgns: bool,
+                             coveredIvals: GenomeIntervals, 
                              imputeMethodLocus: ImputeMethodLocus, 
                              imputeMethodSample: ImputeMethodSample,
                              maxMissingRate: float, afMismatchPthresh: float,
@@ -336,9 +418,11 @@ proc computePolygenicScores*(scores: var seq[float], scoreFile: ScoreFile,
   #   scoreFile: an open ScoreFile describing the polygenic score.
   #   genotypeVcf: an open VCF containing genotypes of samples for which to
   #                calculate scores.
-  #   coveredBed: object containing genome regions which have been well-called
+  #   restrictToCoveredRgns: true if analysis should be restricted to 
+  #                          well-called regions in coveredIvals; false to 
+  #                          consider all loci to be well-covered.
+  #   coveredIvals: object containing genome regions which have been well-called
   #               (covered) by the genotyping method.
-  #               TODO: Not implemented yet
   #   imputeMethodLocus: Imputation method to use when a whole locus fails or
   #                      is missing / not covered.
   #   imputeMethodSample: Imputation method to use for individual samples with
@@ -362,9 +446,9 @@ proc computePolygenicScores*(scores: var seq[float], scoreFile: ScoreFile,
   var nloci = 0
   var dosages = newSeqUninitialized[float](nsamples)
   for scoreEntry in scoreFile:
-    getImputedDosages(dosages, scoreEntry, genotypeVcf, coveredBed, 
-                      imputeMethodLocus, imputeMethodSample, maxMissingRate, 
-                      afMismatchPthresh, minGtForInternalImput)
+    getImputedDosages(dosages, scoreEntry, genotypeVcf, restrictToCoveredRgns,
+                      coveredIvals, imputeMethodLocus, imputeMethodSample, 
+                      maxMissingRate, afMismatchPthresh, minGtForInternalImput)
     for i in 0..scores.high:
       scores[i] += dosages[i] * scoreEntry.beta
     nloci += 1
@@ -438,7 +522,8 @@ proc main() =
 
   var genotypeVcf:VCF
   var scoreFile:ScoreFile
-  var coveredBed:File
+  var coveredIvals:GenomeIntervals
+  var restrictToCoveredRgns:bool
 
   if not open(genotypeVcf, $args["<genotypes.vcf>"]):
     log(lvlFatal, "Could not open input VCF file " & $args["<genotypes.vcf>"])
@@ -446,12 +531,15 @@ proc main() =
   if not open(scoreFile, $args["<scoredef>"]):
     log(lvlFatal, "Could not open polygenic score file " & $args["<scoredef>"])
 
+  restrictToCoveredRgns = false
   if args["--cov"]:
-    log(lvlFatal, "Coverage BED currently not supported.")
+    restrictToCoveredRgns = true
+    if not loadBedIntervals(coveredIvals, $args["--cov"]):
+      log(lvlFatal, "Could not open coverage BED file " & $args["--cov"])
 
   var scores = newSeqUninitialized[float](0)   # Will be resized as needed
-  computePolygenicScores(scores, scoreFile, genotypeVcf, coveredBed, 
-                         imputeMethodLocus, imputeMethodSample,
+  computePolygenicScores(scores, scoreFile, genotypeVcf, restrictToCoveredRgns,
+                         coveredIvals, imputeMethodLocus, imputeMethodSample,
                          maxMissingRate, afMismatchPthresh, 
                          minInternalImputeCohortSize)
 

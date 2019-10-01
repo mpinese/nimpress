@@ -17,7 +17,7 @@ import lapper
 
 macro tpub*(x: untyped): untyped =
   ## Marks a proc with an export asterisk when ``-d:testing`` is defined.
-  # From https://forum.nim-lang.org/t/3269
+  ## From https://forum.nim-lang.org/t/3269
   expectKind(x, RoutineNodes)
   when defined(testing):
     let n = name(x)
@@ -25,7 +25,7 @@ macro tpub*(x: untyped): untyped =
   result = x
 
 
-proc isNaN(x:float): bool =
+proc isNaN(x: float): bool =
   result = x.classify == fcNaN
 
 
@@ -47,7 +47,7 @@ proc tallyAlleles(rawDosages: seq[float]): (float, float, float) =
   return (ngenotyped, nmissing, neffectallele)
 
 
-proc dbinom (x: int, n: int, p: float): float {.tpub.} = 
+proc dbinom (x: int, n: int, p: float): float {.tpub.} =
   ## Pr(x successes in n trials | Pr(success) = p)
   binom(n, x).toFloat * pow(p, x.toFloat) * pow(1.0-p, (n-x).toFloat)
 
@@ -61,7 +61,7 @@ proc pbinom(x: int, n: int, p: float): float {.tpub.} =
 
 
 proc binomTest(x: int, n: int, p: float): float {.tpub.} =
-  ## Two-sided binomial test of observing x successes or more extreme in n 
+  ## Two-sided binomial test of observing x successes or more extreme in n
   ## trials, given success probability of p.  Returns the p value.
 
   # Edge cases
@@ -78,8 +78,8 @@ proc binomTest(x: int, n: int, p: float): float {.tpub.} =
   if abs(x.toFloat/expectedVal - 1.0) < 1.0e-6:
     return 1.0
 
-  # Find the integration limits by enumeration, and use to evaluate the 
-  # p value. There's probably a more efficient implementation (Newton's?) for 
+  # Find the integration limits by enumeration, and use to evaluate the
+  # p value. There's probably a more efficient implementation (Newton's?) for
   # large n; consider this if profiling indicates this is a bottleneck.
   if x.toFloat < expectedVal:
     var y = 0
@@ -101,23 +101,23 @@ proc binomTest(x: int, n: int, p: float): float {.tpub.} =
 ################################################################################
 
 type ScoreFile* = object
-  # Really rough polygenic score file definition, just to get something working.  
-  # Current format is 5 header lines followed by 6-column TSV.  Header lines 
-  # are:
-  #   name (string)
-  #   description (string)
-  #   citation (string)
-  #   genome version (string)
-  #   offset (string representation of float)
-  # The subsequent TSV section is headerless, with one row per effect allele, 
-  # columns:
-  #   chrom, pos, ref, effectallele, beta, eaf
-  # where beta is the PS coefficient and eaf the effectallele MAF in the source 
-  # population.  effectallele may equal ref, in which case beta is the 
-  # coefficient for reference allele dosage.
-  #
-  # In future this should be a 'real' format (tabix-compatible? Will need to be 
-  # space efficient if genome-wide scores are on the table).  
+  ## Really rough polygenic score file definition, just to get something
+  ## working.  Current format is 5 header lines followed by 6-column TSV.
+  ## Header lines are:
+  ##   name (string)
+  ##   description (string)
+  ##   citation (string)
+  ##   genome version (string)
+  ##   offset (string representation of float)
+  ## The subsequent TSV section is headerless, with one row per effect allele,
+  ## columns:
+  ##   chrom, pos, ref, effectallele, beta, eaf
+  ## where beta is the PS coefficient and eaf the effectallele MAF in the source
+  ## population.  effectallele may equal ref, in which case beta is the
+  ## coefficient for reference allele dosage.
+  ##
+  ## In future this should be a 'real' format (tabix-compatible? Will need to be
+  ## space efficient if genome-wide scores are on the table).
   fileobj: File
   name: string
   desc: string
@@ -127,7 +127,7 @@ type ScoreFile* = object
 
 
 type ScoreEntry = tuple
-  # Tuple container for ScoreFile records
+  ## Tuple container for ScoreFile records
   contig: string
   pos: int
   refseq: string
@@ -137,7 +137,7 @@ type ScoreEntry = tuple
 
 
 proc open*(scoreFile: var ScoreFile, path: string): bool =
-  # Open a ScoreFile
+  ## Open a ScoreFile
   scoreFile.fileobj = open(path)
   if scoreFile.fileobj.isNil:
     return false
@@ -145,17 +145,18 @@ proc open*(scoreFile: var ScoreFile, path: string): bool =
   scoreFile.desc = scoreFile.fileobj.readLine.strip(leading = false)
   scoreFile.cite = scoreFile.fileobj.readLine.strip(leading = false)
   scoreFile.genomever = scoreFile.fileobj.readLine.strip(leading = false)
-  scoreFile.offset = scoreFile.fileobj.readLine.strip(leading = false).parseFloat
+  scoreFile.offset = scoreFile.fileobj.readLine.strip(
+      leading = false).parseFloat
   return true
 
 
 iterator items(scoreFile: ScoreFile): ScoreEntry =
-  # Iterate over entries in scoreFile
+  ## Iterate over entries in scoreFile
   var line: string
   while scoreFile.fileobj.readLine(line):
     let lineparts = line.strip(leading = false).split('\t')
     doAssert lineparts.len == 6
-    yield (lineparts[0], lineparts[1].parseInt, lineparts[2], lineparts[3], 
+    yield (lineparts[0], lineparts[1].parseInt, lineparts[2], lineparts[3],
            lineparts[4].parseFloat, lineparts[5].parseFloat)
 
 
@@ -170,7 +171,8 @@ type ContigInterval = ref object
 
 proc start(ival: ContigInterval): int = return ival.start
 proc stop(ival: ContigInterval): int = return ival.stop
-proc `$`(ival: ContigInterval): string = return "[$#,$#)" % [$ival.start, $ival.stop]
+proc `$`(ival: ContigInterval): string = return "[$#,$#)" %
+  [$ival.start, $ival.stop]
 
 
 type GenomeIntervals* = object
@@ -179,11 +181,11 @@ type GenomeIntervals* = object
   contigIntervals: Table[string, seq[ContigInterval]]
 
 
-proc loadBedIntervals*(ivals: var GenomeIntervals, path: string): bool = 
-  # Load a BED file in path into the ivals object. On success, all ivals data
-  # will be replaced with the BED file intervals.  Returns true on success, 
-  # else false.  If the load fails (return value false), ivals will not be 
-  # changed.
+proc loadBedIntervals*(ivals: var GenomeIntervals, path: string): bool =
+  ## Load a BED file in path into the ivals object. On success, all ivals data
+  ## will be replaced with the BED file intervals.  Returns true on success,
+  ## else false.  If the load fails (return value false), ivals will not be
+  ## changed.
   let infile = open(path)
   if infile.isNil:
     return false
@@ -201,7 +203,8 @@ proc loadBedIntervals*(ivals: var GenomeIntervals, path: string): bool =
       end1 = lineparts[2]
     if not ivals.contigIntervals.hasKey(chrom):
       ivals.contigIntervals[chrom] = @[]
-    ivals.contigIntervals[chrom].add(ContigInterval(start:start0.parseInt, stop:end1.parseInt))
+    ivals.contigIntervals[chrom].add(ContigInterval(start: start0.parseInt,
+        stop: end1.parseInt))
 
   # Add lapper indices
   for chrom in ivals.contigIntervals.keys:
@@ -211,27 +214,28 @@ proc loadBedIntervals*(ivals: var GenomeIntervals, path: string): bool =
   return true
 
 
-proc isVariantCovered(scoreEntry:ScoreEntry, coveredIvals:GenomeIntervals): bool =
-  # Tests for whether the variant in scoreEntry falls within an interval in
-  # coveredIvals.  coveredIvals contains half-open 0-based intervals, as per the
-  # BED format.  scoreEntry.pos is in 1-based format, as per VCF. If 
-  # coveredIvals is not initalised (coveredIvals.init == false), always returns
-  # false.
-  #
-  # Return value:
-  #   true if scoreEntry falls entirely within at least one coveredIvals 
-  #     interval,
-  #   else false. 
+proc isVariantCovered(scoreEntry: ScoreEntry,
+    coveredIvals: GenomeIntervals): bool =
+  ## Tests for whether the variant in scoreEntry falls within an interval in
+  ## coveredIvals.  coveredIvals contains half-open 0-based intervals, as per
+  ## the BED format.  scoreEntry.pos is in 1-based format, as per VCF. If
+  ## coveredIvals is not initalised (coveredIvals.init == false), always returns
+  ## false.
+  ##
+  ## Return value:
+  ##   true if scoreEntry falls entirely within at least one coveredIvals
+  ##     interval,
+  ##   else false.
   if not coveredIvals.contigIntervalsIndex.hasKey(scoreEntry.contig):
     log(lvlWarn, "Contig " & scoreEntry.contig & " not present within the " &
         "coverage BED file.")
-    return false    # The whole contig is missing from coveredIvals.
+    return false # The whole contig is missing from coveredIvals.
 
   # Get all overlapping intervals. Note the -1 to convert from 1-based inclusive
   # VCF pos to BED half-open intervals
   var ivs = new_seq[ContigInterval]()
   var contigLapper = coveredIvals.contigIntervalsIndex[scoreEntry.contig]
-  let anyfound = contigLapper.find(scoreEntry.pos-1, 
+  let anyfound = contigLapper.find(scoreEntry.pos-1,
                                    scoreEntry.pos+scoreEntry.refseq.len, ivs)
   if not anyfound:
     return false
@@ -239,7 +243,8 @@ proc isVariantCovered(scoreEntry:ScoreEntry, coveredIvals:GenomeIntervals): bool
   # At least one overlapping interval was found. Loop over each to confirm the
   # variant falls entirely within the interval.
   for ci in ivs:
-    if ci.start < scoreEntry.pos and ci.stop >= scoreEntry.pos+scoreEntry.refseq.len-1:
+    if ci.start < scoreEntry.pos and ci.stop >=
+        scoreEntry.pos+scoreEntry.refseq.len-1:
       return true
   return false
 
@@ -249,8 +254,8 @@ proc isVariantCovered(scoreEntry:ScoreEntry, coveredIvals:GenomeIntervals): bool
 ## VCF access: variant search and dosage querying
 ################################################################################
 
-proc findVariant(contig:string, pos:int, refseq:string, easeq:string, 
-                 vcf:VCF): Variant =
+proc findVariant(contig: string, pos: int, refseq: string, easeq: string,
+                 vcf: VCF): Variant =
   # Find contig:pos:refseq:easeq in vcf.  Returns the
   # whole VCF Variant if found, else nil.
   result = nil
@@ -263,18 +268,19 @@ proc findVariant(contig:string, pos:int, refseq:string, easeq:string,
           return variant
 
 
-proc getRawDosages(rawDosages: var seq[float], variant:Variant, easeq:string) =
-  # Get the dosages of easeq in the VCF Variant variant.  Returns
-  # a sequence with values in {NaN, 0., 1., 2.}, being the dosage, or NaN
-  # if no genotype is available.
-  # TODO: Had trouble figuring out the best way to access the hts-nim API for
-  # this.  Probably a much faster way to do it.  Not recreating the gts int32
-  # seq each time seems like a good start.
+proc getRawDosages(rawDosages: var seq[float], variant: Variant,
+    easeq: string) =
+  ## Get the dosages of easeq in the VCF Variant variant.  Returns
+  ## a sequence with values in {NaN, 0., 1., 2.}, being the dosage, or NaN
+  ## if no genotype is available.
+  ## TODO: Had trouble figuring out the best way to access the hts-nim API for
+  ## this.  Probably a much faster way to do it.  Not recreating the gts int32
+  ## seq each time seems like a good start.
   let eaidx =
     if easeq == variant.REF:
       0
     else:
-      find(variant.ALT, easeq) + 1    # index of the desired alt allele
+      find(variant.ALT, easeq) + 1 # index of the desired alt allele
   doAssert eaidx >= 0
   var gts = newSeqUninitialized[int32](variant.n_samples)
 
@@ -294,28 +300,28 @@ proc getRawDosages(rawDosages: var seq[float], variant:Variant, easeq:string) =
 ## Imputation
 ################################################################################
 
-# Locus and sample imputation methods:
-# ps        Impute with dosage based on the polygenic score effect allele 
-#           frequency.
-# homref    Impute to homozygous reference genotype.
-# fail      Do not impute, but fail. Failed samples will have a score of "nan"
-# int_ps    Impute with dosage calculated from non-missing samples in the cohort
-#           At least --mincs non-missing samples must be available for this 
-#           method to be used, else it will fall back to ps.
-# int_fail  Impute with dosage calculated from non-missing samples in the cohort
-#           At least --mincs non-missing samples must be available for this 
-#           method to be used, else it will fall back to fail.
-type ImputeMethodLocus* {.pure.} = enum ps, homref, fail
-type ImputeMethodSample* {.pure.} = enum ps, homref, fail, int_ps, int_fail
+## Locus and sample imputation methods:
+## ps        Impute with dosage based on the polygenic score effect allele
+##           frequency.
+## homref    Impute to homozygous reference genotype.
+## fail      Do not impute, but fail. Failed samples will have a score of "nan"
+## int_ps    Impute with dosage calculated from non-missing samples in the
+##           cohort. At least --mincs non-missing samples must be available for
+##           this method to be used, else it will fall back to ps.
+## int_fail  Impute with dosage calculated from non-missing samples in the
+##           cohort. At least --mincs non-missing samples must be available for
+##           this method to be used, else it will fall back to fail.
+type ImputeMethodLocus*{.pure.} = enum ps, homref, fail
+type ImputeMethodSample*{.pure.} = enum ps, homref, fail, int_ps, int_fail
 
 
-proc imputeLocusDosages(dosages: var seq[float], scoreEntry: ScoreEntry, 
+proc imputeLocusDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
                         imputeMethodLocus: ImputeMethodLocus) =
-  # Impute all dosages at a locus.  Even non-missing genotypes are imputed.
-  #
-  # dosages: destination seq to which imputed dosages will be written.
-  # scoreEntry: the polygenic score entry corresponding to this locus.
-  # imputeMethodLocus: imputation method.
+  ## Impute all dosages at a locus.  Even non-missing genotypes are imputed.
+  ##
+  ## dosages: destination seq to which imputed dosages will be written.
+  ## scoreEntry: the polygenic score entry corresponding to this locus.
+  ## imputeMethodLocus: imputation method.
   let imputed_dosage = case imputeMethodLocus:
     of ImputeMethodLocus.ps:
       scoreEntry.eaf*2.0
@@ -328,16 +334,16 @@ proc imputeLocusDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
     dosages[i] = imputed_dosage
 
 
-proc imputeSampleDosages(dosages: var seq[float], scoreEntry: ScoreEntry, 
+proc imputeSampleDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
                          nEffectAllele: float, nGenotyped: float,
-                         minGtForInternalImput: int, 
+                         minGtForInternalImput: int,
                          imputeMethodSample: ImputeMethodSample) =
-  # Impute missing genotype dosages at a locus.  Genotypes which are not
-  # missing will not be imputed.
-  #
-  # dosages: destination seq to which imputed dosages will be written.
-  # scoreEntry: the polygenic score entry corresponding to this locus.
-  # imputeMethodSample: imputation method.
+  ## Impute missing genotype dosages at a locus.  Genotypes which are not
+  ## missing will not be imputed.
+  ##
+  ## dosages: destination seq to which imputed dosages will be written.
+  ## scoreEntry: the polygenic score entry corresponding to this locus.
+  ## imputeMethodSample: imputation method.
   let imputed_dosage = case imputeMethodSample:
     of ImputeMethodSample.ps:
       scoreEntry.eaf*2.0
@@ -362,57 +368,57 @@ proc imputeSampleDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
       dosages[i] = imputed_dosage
 
 
-proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry, 
+proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
                        genotypeVcf: VCF, restrictToCoveredRgns: bool,
-                       coveredIvals: GenomeIntervals,  
-                       imputeMethodLocus: ImputeMethodLocus, 
+                       coveredIvals: GenomeIntervals,
+                       imputeMethodLocus: ImputeMethodLocus,
                        imputeMethodSample: ImputeMethodSample,
                        maxMissingRate: float, afMismatchPthresh: float,
                        minGtForInternalImput: int) =
-  # Fetch dosages of allele described in scoreEntry from samples genotyped in
-  # genotypeVcf.  Impute dosages if necessary.
-  #
-  #   dosages: destination seq to which imputed dosages will be written.
-  #   scoreEntry: the polygenic score entry corresponding to this locus.
-  #   restrictToCoveredRgns: true if analysis should be restricted to 
-  #                          well-called regions in coveredIvals; false to 
-  #                          consider all loci to be well-covered.
-  #   coveredIvals: object containing genome regions which have been well-called
-  #               (covered) by the genotyping method.
-  #   imputeMethodLocus: Imputation method to use when a whole locus fails or
-  #                      is missing / not covered.
-  #   imputeMethodSample: Imputation method to use for individual samples with
-  #                       missing genotype, in a locus that passes QC filters.
-  #   maxMissingRate: loci with more than this rate of missing samples fail
-  #                   QC and are imputed.
-  #   afMismatchPthresh: p-value threshold to warn about allele frequency 
-  #                      mismatch between the cohort in genotypeVcf and the
-  #                      polygenic score in scoreFile.
-  #   minGtForInternalImput: Minimum number of genotyped samples at a locus for
-  #                          internal imputation to be applied.
+  ## Fetch dosages of allele described in scoreEntry from samples genotyped in
+  ## genotypeVcf.  Impute dosages if necessary.
+  ##
+  ##   dosages: destination seq to which imputed dosages will be written.
+  ##   scoreEntry: the polygenic score entry corresponding to this locus.
+  ##   restrictToCoveredRgns: true if analysis should be restricted to
+  ##                          well-called regions in coveredIvals; false to
+  ##                          consider all loci to be well-covered.
+  ##   coveredIvals: object containing genome regions which have been well-
+  ##                 called (covered) by the genotyping method.
+  ##   imputeMethodLocus: Imputation method to use when a whole locus fails or
+  ##                      is missing / not covered.
+  ##   imputeMethodSample: Imputation method to use for individual samples with
+  ##                       missing genotype, in a locus that passes QC filters.
+  ##   maxMissingRate: loci with more than this rate of missing samples fail
+  ##                   QC and are imputed.
+  ##   afMismatchPthresh: p-value threshold to warn about allele frequency
+  ##                      mismatch between the cohort in genotypeVcf and the
+  ##                      polygenic score in scoreFile.
+  ##   minGtForInternalImput: Minimum number of genotyped samples at a locus for
+  ##                          internal imputation to be applied.
   let nsamples = genotypeVcf.n_samples
   dosages.setLen(nsamples)
 
   if restrictToCoveredRgns and not isVariantCovered(scoreEntry, coveredIvals):
-    log(lvlWarn, "Locus " & scoreEntry.contig & ":" & $scoreEntry.pos & "-" & 
-        $(scoreEntry.pos + scoreEntry.refseq.len - 1) & 
+    log(lvlWarn, "Locus " & scoreEntry.contig & ":" & $scoreEntry.pos & "-" &
+        $(scoreEntry.pos + scoreEntry.refseq.len - 1) &
         " is not covered by the sequence coverage BED.  Imputing all dosages " &
         "at this locus.")
     imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
     return
 
-  let variant = findVariant(scoreEntry.contig, scoreEntry.pos, 
+  let variant = findVariant(scoreEntry.contig, scoreEntry.pos,
                             scoreEntry.refseq, scoreEntry.easeq, genotypeVcf)
 
   if variant.isNil:
     if binomTest(0, nsamples*2, scoreEntry.eaf) < afMismatchPthresh:
-      log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos & 
-          ":" & $scoreEntry.refseq & ":" & $scoreEntry.easeq & 
+      log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos &
+          ":" & $scoreEntry.refseq & ":" & $scoreEntry.easeq &
           " cohort EAF is 0 in " & $nsamples & " samples.  This is highly" &
           " unlikely given polygenic score EAF of " & $scoreEntry.eaf)
     # This variant is in the covered regions (or no coverage BED was supplied,
     # in which case we assume it's covered), but is missing from the VCF.  The
-    # implication is that the locus is all homref. Set all dosages to homref and 
+    # implication is that the locus is all homref. Set all dosages to homref and
     # return
     let impute_dosage = if scoreEntry.refseq == scoreEntry.easeq: 2.0 else: 0.0
     for i in 0..dosages.high:
@@ -420,9 +426,9 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
     return
 
   if $variant.FILTER != "." and $variant.FILTER != "PASS":
-    log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos & ":" & 
-        $scoreEntry.refseq & ":" & $scoreEntry.easeq & 
-        " has a FILTER flag set (value \"" & $variant.FILTER & "\").  " & 
+    log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos & ":" &
+        $scoreEntry.refseq & ":" & $scoreEntry.easeq &
+        " has a FILTER flag set (value \"" & $variant.FILTER & "\").  " &
         "Imputing all dosages at this locus.")
     imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
     return
@@ -431,25 +437,26 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
   getRawDosages(dosages, variant, scoreEntry.easeq)
 
   let (ngenotyped, nmissing, neffectallele) = tallyAlleles(dosages)
-  
+
   let missingrate = nmissing / nsamples.toFloat
   if missingrate > maxMissingRate:
-    log(lvlWarn, "Locus " & scoreEntry.contig & ":" & $scoreEntry.pos & "-" & 
-        $(scoreEntry.pos + scoreEntry.refseq.len - 1) & " has " & 
+    log(lvlWarn, "Locus " & scoreEntry.contig & ":" & $scoreEntry.pos & "-" &
+        $(scoreEntry.pos + scoreEntry.refseq.len - 1) & " has " &
         $(missingrate*100) & "% of samples missing a genotype. This exceeds " &
         "the missingness threshold; imputing all dosages at this locus.")
     imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
     return
 
-  if binomTest(neffectallele.toInt, (nsamples-nmissing.toInt)*2, scoreEntry.eaf) < afMismatchPthresh:
-    log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos & 
+  if binomTest(neffectallele.toInt, (nsamples-nmissing.toInt)*2,
+      scoreEntry.eaf) < afMismatchPthresh:
+    log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos &
         ":" & $scoreEntry.refseq & ":" & $scoreEntry.easeq & " cohort EAF is " &
-        $(neffectallele/((nsamples-nmissing.toInt)*2).toFloat) & " in " & 
+        $(neffectallele/((nsamples-nmissing.toInt)*2).toFloat) & " in " &
         $nsamples & " samples.  This is highly unlikely given polygenic " &
         "score EAF of " & $scoreEntry.eaf)
 
   # Impute single missing sample dosages
-  imputeSampleDosages(dosages, scoreEntry, neffectallele, ngenotyped, 
+  imputeSampleDosages(dosages, scoreEntry, neffectallele, ngenotyped,
                       minGtForInternalImput, imputeMethodSample)
 
 
@@ -458,36 +465,36 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
 ## Polygenic score calculation
 ################################################################################
 
-proc computePolygenicScores*(scores: var seq[float], scoreFile: ScoreFile, 
+proc computePolygenicScores*(scores: var seq[float], scoreFile: ScoreFile,
                              genotypeVcf: VCF, restrictToCoveredRgns: bool,
-                             coveredIvals: GenomeIntervals, 
-                             imputeMethodLocus: ImputeMethodLocus, 
+                             coveredIvals: GenomeIntervals,
+                             imputeMethodLocus: ImputeMethodLocus,
                              imputeMethodSample: ImputeMethodSample,
                              maxMissingRate: float, afMismatchPthresh: float,
                              minGtForInternalImput: int) =
-  # Compute polygenic scores.
-  #
-  #   scores: seq[float] to which the scores will be written. Will be resized to
-  #           the number of samples in genotypeVcf.
-  #   scoreFile: an open ScoreFile describing the polygenic score.
-  #   genotypeVcf: an open VCF containing genotypes of samples for which to
-  #                calculate scores.
-  #   restrictToCoveredRgns: true if analysis should be restricted to 
-  #                          well-called regions in coveredIvals; false to 
-  #                          consider all loci to be well-covered.
-  #   coveredIvals: object containing genome regions which have been well-called
-  #               (covered) by the genotyping method.
-  #   imputeMethodLocus: Imputation method to use when a whole locus fails or
-  #                      is missing / not covered.
-  #   imputeMethodSample: Imputation method to use for individual samples with
-  #                       missing genotype, in a locus that passes QC filters.
-  #   maxMissingRate: loci with more than this rate of missing samples fail
-  #                   QC and are imputed.
-  #   afMismatchPthresh: p-value threshold to warn about allele frequency 
-  #                      mismatch between the cohort in genotypeVcf and the
-  #                      polygenic score in scoreFile.
-  #   minGtForInternalImput: Minimum number of genotyped samples at a locus for
-  #                          internal imputation to be applied.
+  ## Compute polygenic scores.
+  ##
+  ##   scores: seq[float] to which the scores will be written. Will be resized
+  ##           to the number of samples in genotypeVcf.
+  ##   scoreFile: an open ScoreFile describing the polygenic score.
+  ##   genotypeVcf: an open VCF containing genotypes of samples for which to
+  ##                calculate scores.
+  ##   restrictToCoveredRgns: true if analysis should be restricted to
+  ##                          well-called regions in coveredIvals; false to
+  ##                          consider all loci to be well-covered.
+  ##   coveredIvals: object containing genome regions which have been well-
+  ##                 called (covered) by the genotyping method.
+  ##   imputeMethodLocus: Imputation method to use when a whole locus fails or
+  ##                      is missing / not covered.
+  ##   imputeMethodSample: Imputation method to use for individual samples with
+  ##                       missing genotype, in a locus that passes QC filters.
+  ##   maxMissingRate: loci with more than this rate of missing samples fail
+  ##                   QC and are imputed.
+  ##   afMismatchPthresh: p-value threshold to warn about allele frequency
+  ##                      mismatch between the cohort in genotypeVcf and the
+  ##                      polygenic score in scoreFile.
+  ##   minGtForInternalImput: Minimum number of genotyped samples at a locus for
+  ##                          internal imputation to be applied.
   let nsamples = genotypeVcf.n_samples
 
   # Initialise the scores to zero; offset will be added later
@@ -501,7 +508,7 @@ proc computePolygenicScores*(scores: var seq[float], scoreFile: ScoreFile,
   var dosages = newSeqUninitialized[float](nsamples)
   for scoreEntry in scoreFile:
     getImputedDosages(dosages, scoreEntry, genotypeVcf, restrictToCoveredRgns,
-                      coveredIvals, imputeMethodLocus, imputeMethodSample, 
+                      coveredIvals, imputeMethodLocus, imputeMethodSample,
                       maxMissingRate, afMismatchPthresh, minGtForInternalImput)
     for i in 0..scores.high:
       scores[i] += dosages[i] * scoreEntry.beta
@@ -517,7 +524,7 @@ proc computePolygenicScores*(scores: var seq[float], scoreFile: ScoreFile,
 
 
 
-proc main() = 
+proc main() =
   let doc = """
   Compute polygenic scores from a VCF/BCF.
 
@@ -574,10 +581,10 @@ proc main() =
     imputeMethodLocus = parseEnum[ImputeMethodLocus]($args["--imp-locus"])
     imputeMethodSample = parseEnum[ImputeMethodSample]($args["--imp-sample"])
 
-  var genotypeVcf:VCF
-  var scoreFile:ScoreFile
-  var coveredIvals:GenomeIntervals
-  var restrictToCoveredRgns:bool
+  var genotypeVcf: VCF
+  var scoreFile: ScoreFile
+  var coveredIvals: GenomeIntervals
+  var restrictToCoveredRgns: bool
 
   if not open(genotypeVcf, $args["<genotypes.vcf>"]):
     log(lvlFatal, "Could not open input VCF file " & $args["<genotypes.vcf>"])
@@ -593,10 +600,10 @@ proc main() =
     if not loadBedIntervals(coveredIvals, $args["--cov"]):
       log(lvlFatal, "Could not open coverage BED file " & $args["--cov"])
 
-  var scores = newSeqUninitialized[float](0)   # Will be resized as needed
+  var scores = newSeqUninitialized[float](0)       # Will be resized as needed
   computePolygenicScores(scores, scoreFile, genotypeVcf, restrictToCoveredRgns,
                          coveredIvals, imputeMethodLocus, imputeMethodSample,
-                         maxMissingRate, afMismatchPthresh, 
+                         maxMissingRate, afMismatchPthresh,
                          minInternalImputeCohortSize)
 
   for i in 0..scores.high:

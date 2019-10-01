@@ -75,11 +75,12 @@ proc binomTest(x: int, n: int, p: float): float {.tpub.} =
     expectedVal = n.toFloat*p
 
   # Edge case again
-  if abs(x.toFloat / expectedVal - 1.0) < 1.0e-6:
+  if abs(x.toFloat/expectedVal - 1.0) < 1.0e-6:
     return 1.0
 
-  # Find the Pr threshold by direct search, and use to evaluate the p value
-  # TODO: There's probably a more efficient implementation for large n. 
+  # Find the integration limits by enumeration, and use to evaluate the 
+  # p value. There's probably a more efficient implementation (Newton's?) for 
+  # large n; consider this if profiling indicates this is a bottleneck.
   if x.toFloat < expectedVal:
     var y = 0
     for xi in expectedVal.ceil.toInt..n:

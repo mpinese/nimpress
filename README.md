@@ -52,8 +52,8 @@ The placeholder format is a text file:
 <citation>
 <genome version>
 <offset>
-<chrom>\t<pos>\t<ref>\t<alt>\t<beta>\taaf
-<chrom>\t<pos>\t<ref>\t<alt>\t<beta>\taaf
+<chrom>\t<pos>\t<refallele>\t<effallele>\t<beta>\t<effallele_af>
+<chrom>\t<pos>\t<refallele>\t<effallele>\t<beta>\t<effallele_af>
 ...
 ```
 The first four header records (name, description, citation, and genome version) are free text, 
@@ -61,19 +61,21 @@ the last header record (offset) is a string representation of a floating point n
 
 Lines following the header define the polygenic score alleles and coefficients, one line per
 allele, with fields separated by tabs.  <beta> is the polygenic score coefficient associated with
-a single alternate allele.  <aaf> is the alt allele frequency in the polygenic score derivation
-cohort, 0 < aaf <= 1.
+a single alternate allele.  <effallele_af> is the effect allele frequency in the polygenic score derivation
+cohort, 0 < effallele_af <= 1.
 
 The polygenic score for sample `i` is calculated as:
 ```
   score_i = sum_{j=1..m}(beta_j*dosage_ij)/m + offset
 ```
 where `offset` is the offset as given in the header, `beta_j` is the beta for row `j` of the 
-polygenic score definition, `dosage_ij` is the dosage of the row `j` alt allele in sample `i`,
+polygenic score definition, `dosage_ij` is the dosage of the row `j` effect allele in sample `i`,
 and `m` is the number of alleles (rows) in the polygenic score.  `dosage_ij` may be imputed.
+It's not uncommon for the reference allele to also be the effect allele; in this case set
+`<effallele>` to equal `<refallele>`.
 
 # Limitations
-* Currently has diploid-specific logic.
+* Currently diploid-specific.
 * Does not fully handle multi-allelic risk loci (specifically, loci at which more than one allele has a nonzero beta are not supported)
 * Performs only simple allele matching. As the representation of some variants in VCF is not unique, this may lead to polygenic score variants being imputed even if they are present in the VCF.
 

@@ -135,6 +135,8 @@ type ScoreEntry = tuple
   beta: float
   eaf: float
 
+proc stop*(s:ScoreEntry): int {.inline.} =
+  return s.pos + s.refseq.len - 1
 
 proc open*(scoreFile: var ScoreFile, path: string): bool =
   ## Open a ScoreFile
@@ -165,7 +167,7 @@ iterator items(scoreFile: ScoreFile): ScoreEntry =
 ## Handling of well-genotyped regions
 ################################################################################
 
-type ContigInterval = ref object
+type ContigInterval = object
   start: int
   stop: int
 
@@ -213,6 +215,8 @@ proc loadBedIntervals*(ivals: var GenomeIntervals, path: string): bool =
   ivals.init = true
   return true
 
+proc contains(ci:ContigInterval, scoreEntry: ScoreEntry): bool {.inline.} =
+  return ci.start < scoreEntry.pos and ci.stop >= scoreEntry.stop
 
 proc isVariantCovered(scoreEntry: ScoreEntry,
     coveredIvals: GenomeIntervals): bool =
@@ -233,19 +237,19 @@ proc isVariantCovered(scoreEntry: ScoreEntry,
 
   # Get all overlapping intervals. Note the -1 to convert from 1-based inclusive
   # VCF pos to BED half-open intervals
+  if scoreEntry.contig notin coveredIvals.contigIntervalsIndex:
+    return false
+
   var ivs = new_seq[ContigInterval]()
   var contigLapper = coveredIvals.contigIntervalsIndex[scoreEntry.contig]
-  let anyfound = contigLapper.find(scoreEntry.pos-1,
-                                   scoreEntry.pos+scoreEntry.refseq.len, ivs)
+  let anyfound = contigLapper.find(scoreEntry.pos-1, scoreEntry.stop + 1, ivs)
   if not anyfound:
     return false
 
   # At least one overlapping interval was found. Loop over each to confirm the
   # variant falls entirely within the interval.
   for ci in ivs:
-    if ci.start < scoreEntry.pos and ci.stop >=
-        scoreEntry.pos+scoreEntry.refseq.len-1:
-      return true
+    if ci.contains(scoreEntry): return true
   return false
 
 
@@ -401,7 +405,7 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
 
   if restrictToCoveredRgns and not isVariantCovered(scoreEntry, coveredIvals):
     log(lvlWarn, "Locus " & scoreEntry.contig & ":" & $scoreEntry.pos & "-" &
-        $(scoreEntry.pos + scoreEntry.refseq.len - 1) &
+        $scoreEntry.stop &
         " is not covered by the sequence coverage BED.  Imputing all dosages " &
         "at this locus.")
     imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
@@ -441,7 +445,7 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
   let missingrate = nmissing / nsamples.toFloat
   if missingrate > maxMissingRate:
     log(lvlWarn, "Locus " & scoreEntry.contig & ":" & $scoreEntry.pos & "-" &
-        $(scoreEntry.pos + scoreEntry.refseq.len - 1) & " has " &
+        $scoreEntry.stop & " has " &
         $(missingrate*100) & "% of samples missing a genotype. This exceeds " &
         "the missingness threshold; imputing all dosages at this locus.")
     imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)

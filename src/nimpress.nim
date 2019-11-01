@@ -330,7 +330,10 @@ proc imputeLocusDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
     of ImputeMethodLocus.ps:
       scoreEntry.eaf*2.0
     of ImputeMethodLocus.homref:
-      0.0
+      if scoreEntry.refseq == scoreEntry.easeq:
+        2.0
+      else:
+        0.0
     of ImputeMethodLocus.fail:
       NaN
 

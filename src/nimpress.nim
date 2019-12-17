@@ -65,35 +65,35 @@ proc binomTest(x: int, n: int, p: float): float {.tpub.} =
   ## trials, given success probability of p.  Returns the p value.
 
   # Edge cases
-  if p == 0.0:
-    return if x == 0: 1.0 else: 0.0
-  elif p == 1.0:
-    return if x == n: 1.0 else: 0.0
+  #if p == 0.0:
+  #  return if x == 0: 1.0 else: 0.0
+  #elif p == 1.0:
+  #  return if x == n: 1.0 else: 0.0
 
-  let
-    probx = dbinom(x, n, p)
-    expectedVal = n.toFloat*p
+  #let
+  #  probx = dbinom(x, n, p)
+  #  expectedVal = n.toFloat*p
 
   # Edge case again
-  if abs(x.toFloat/expectedVal - 1.0) < 1.0e-6:
-    return 1.0
+  #if abs(x.toFloat/expectedVal - 1.0) < 1.0e-6:
+  #  return 1.0
 
   # Find the integration limits by enumeration, and use to evaluate the
   # p value. There's probably a more efficient implementation (Newton's?) for
   # large n; consider this if profiling indicates this is a bottleneck.
-  if x.toFloat < expectedVal:
-    var y = 0
-    for xi in expectedVal.ceil.toInt..n:
-      if dbinom(xi, n, p) <= probx * (1.0+1.0e-7):
-        y += 1
-    return pbinom(x, n, p) + (1.0 - pbinom(n - y, n, p))
-  else: # x > expectedVal
-    var y = 0
-    for xi in 0..(floor(expectedVal).toInt):
-      if dbinom(xi, n, p) <= probx * (1.0+1.0e-7):
-        y += 1
-    return pbinom(y - 1, n, p) + (1.0 - pbinom(x - 1, n, p))
-
+  #if x.toFloat < expectedVal:
+  #  var y = 0
+  #  for xi in expectedVal.ceil.toInt..n:
+  #    if dbinom(xi, n, p) <= probx * (1.0+1.0e-7):
+  #      y += 1
+  #  return pbinom(x, n, p) + (1.0 - pbinom(n - y, n, p))
+  #else: # x > expectedVal
+  #  var y = 0
+  #  for xi in 0..(floor(expectedVal).toInt):
+  #    if dbinom(xi, n, p) <= probx * (1.0+1.0e-7):
+  #      y += 1
+  #  return pbinom(y - 1, n, p) + (1.0 - pbinom(x - 1, n, p))
+  return 1.0
 
 
 ################################################################################
@@ -454,6 +454,10 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
     imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
     return
 
+  ##echo "neffectallele.toInt" & $neffectallele.toInt
+  ##echo "(nsamples-nmissing.toInt)*2" & $nsamples & $nmissing.toInt
+  ##echo "scoreEntry.eaf" & $scoreEntry.eaf
+
   if binomTest(neffectallele.toInt, (nsamples-nmissing.toInt)*2,
       scoreEntry.eaf) < afMismatchPthresh:
     log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos &
@@ -518,7 +522,7 @@ proc computePolygenicScores*(scores: var seq[float], scoreFile: ScoreFile,
                       coveredIvals, imputeMethodLocus, imputeMethodSample,
                       maxMissingRate, afMismatchPthresh, minGtForInternalImput)
     for i in 0..scores.high:
-      scores[i] += dosages[i] * scoreEntry.beta
+       scores[i] += dosages[i]/2.0 * scoreEntry.beta
     nloci += 1
 
   # Average over the PRS loci to match PLINK behaviour
@@ -528,7 +532,6 @@ proc computePolygenicScores*(scores: var seq[float], scoreFile: ScoreFile,
   # Add the offset
   for i in 0..scores.high:
     scores[i] += scoreFile.offset
-
 
 
 proc main() =

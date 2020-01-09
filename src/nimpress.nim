@@ -47,9 +47,17 @@ proc tallyAlleles(rawDosages: seq[float]): (float, float, float) =
   return (ngenotyped, nmissing, neffectallele)
 
 
-proc dbinom (x: int, n: int, p: float): float {.tpub.} =
+## ln(binom(n, k))
+proc lbinom(n:int, k:int): float = lgamma(n.toFloat+1.0) - lgamma(k.toFloat+1.0) - lgamma((n-k).toFloat+1.0)
+
+
+proc dbinom(x: int, n: int, p: float): float {.tpub.} = 
   ## Pr(x successes in n trials | Pr(success) = p)
-  binom(n, x).toFloat * pow(p, x.toFloat) * pow(1.0-p, (n-x).toFloat)
+  result =
+    if x == 0 and p == 0.0 or x == n and p == 1.0:
+      1.0
+    else:
+      exp(lbinom(n, x) + x.toFloat*ln(p) + (n-x).toFloat*ln(1.0-p))
 
 
 proc betacf(a: float, b: float, x: float): float = 
@@ -110,7 +118,7 @@ proc betacf(a: float, b: float, x: float): float =
 
 
 proc betai(a: float, b: float, x: float): float {.tpub.} = 
-  ## Incomplete beta function, I_x(a,b).  Follows NRC algorithm.
+  ## Regularized incomplete beta function, I_x(a,b).  Follows NRC algorithm.
   doAssert x >= 0.0 and x <= 1.0
   if a == 0.0 or b == 0.0:
     return Inf
@@ -136,10 +144,12 @@ proc pbinom(x: int, n: int, p: float): float {.tpub.} =
   # for xi in 0..x:
   #   result += dbinom(xi, n, p)
   result = 
-    if x == n:
+    if x < 0:
+      0.0
+    elif x == n:
       1.0
     else:
-      1.0 - betai(x.float+1.0, n.float, p)
+      1.0 - betai(x.toFloat+1.0, (n-x).toFloat, p)
 
 
 proc binomTest(x: int, n: int, p: float): float {.tpub.} =

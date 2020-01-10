@@ -12,6 +12,8 @@ proc isNaN(x:float): bool =
 
 
 proc checkFloats(x: seq[float], target: seq[float]): bool = 
+  echo(x)
+  echo(target)
   if x.len != target.len:
     return false
   for (xi, ti) in zip(x, target):
@@ -152,3 +154,22 @@ suite "set1":
                            minGtForInternalImput = 100)
     check(checkFloats(scores, @[0.039, 0.039, 0.039, 0.186, -0.111, -0.111]))
 
+
+  test "Versus PLINK 1.90":
+    computePolygenicScores(scores, scoreFile, genotypeVcf, true, coveredBed, 
+                           ImputeMethodLocus.ps,
+                           ImputeMethodSample.ps,
+                           maxMissingRate = 1.0,
+                           afMismatchPthresh = 1.0, 
+                           minGtForInternalImput = 100)
+    check(checkFloats(scores, @[0.123-0.03, 0.123-0.01, 0.123-0.076, 0.123-0.096, 0.123-0.132, 0.123-0.16]))
+
+
+  test "Versus PLINK 2.00":
+    computePolygenicScores(scores, scoreFile, genotypeVcf, true, coveredBed, 
+                           ImputeMethodLocus.ps,
+                           ImputeMethodSample.ps,
+                           maxMissingRate = 1.0,
+                           afMismatchPthresh = 1.0, 
+                           minGtForInternalImput = 100)
+    check(checkFloats(scores, @[0.123-0.0294, 0.123-0.01, 0.123-0884, 0.123+0.0208, 0.123-0.1394, 0.123-0.1674]))

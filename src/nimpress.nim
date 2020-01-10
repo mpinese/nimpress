@@ -401,23 +401,33 @@ proc getRawDosages(rawDosages: var seq[float], variant: Variant,
 ##           frequency.
 ## homref    Impute to homozygous reference genotype.
 ## fail      Do not impute, but fail. Failed samples will have a score of "nan"
+## ignore    Completely ignore missing loci, as if they were never in the score 
+##           definition.
 ## int_ps    Impute with dosage calculated from non-missing samples in the
 ##           cohort. At least --mincs non-missing samples must be available for
 ##           this method to be used, else it will fall back to ps.
 ## int_fail  Impute with dosage calculated from non-missing samples in the
 ##           cohort. At least --mincs non-missing samples must be available for
 ##           this method to be used, else it will fall back to fail.
-type ImputeMethodLocus*{.pure.} = enum ps, homref, fail
+type ImputeMethodLocus*{.pure.} = enum ps, homref, fail, ignore
+type ImputeMethodMissing*{.pure.} = enum homref, ignore
 type ImputeMethodSample*{.pure.} = enum ps, homref, fail, int_ps, int_fail
 
 
 proc imputeLocusDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
-                        imputeMethodLocus: ImputeMethodLocus) =
+                        imputeMethodLocus: ImputeMethodLocus): bool =
   ## Impute all dosages at a locus.  Even non-missing genotypes are imputed.
   ##
   ## dosages: destination seq to which imputed dosages will be written.
   ## scoreEntry: the polygenic score entry corresponding to this locus.
   ## imputeMethodLocus: imputation method.
+  ##
+  ## Returns a boolean indicating if the locus should be used for PRS 
+  ## calculation (return value true), or if it should be discarded (return value
+  ## false).
+  if imputeMethodLocus == ImputeMethodLocus.ignore:
+    return false
+
   let imputed_dosage = case imputeMethodLocus:
     of ImputeMethodLocus.ps:
       scoreEntry.eaf*2.0
@@ -428,9 +438,13 @@ proc imputeLocusDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
         0.0
     of ImputeMethodLocus.fail:
       NaN
+    of ImputeMethodLocus.ignore:
+      NaN
 
   for i in 0..dosages.high:
     dosages[i] = imputed_dosage
+
+  return true
 
 
 proc imputeSampleDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
@@ -471,9 +485,11 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
                        genotypeVcf: VCF, restrictToCoveredRgns: bool,
                        coveredIvals: GenomeIntervals,
                        imputeMethodLocus: ImputeMethodLocus,
+                       imputeMethodMissing: ImputeMethodMissing,
                        imputeMethodSample: ImputeMethodSample,
                        maxMissingRate: float, afMismatchPthresh: float,
-                       minGtForInternalImput: int) =
+                       minGtForInternalImput: int, 
+                       ignoreFilterField: bool): bool =
   ## Fetch dosages of allele described in scoreEntry from samples genotyped in
   ## genotypeVcf.  Impute dosages if necessary.
   ##
@@ -486,6 +502,8 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
   ##                 called (covered) by the genotyping method.
   ##   imputeMethodLocus: Imputation method to use when a whole locus fails or
   ##                      is missing / not covered.
+  ##   imputeMethodMissing: Imputation to use for variants which are at covered 
+  ##                        loci, but which are not present in the VCF.
   ##   imputeMethodSample: Imputation method to use for individual samples with
   ##                       missing genotype, in a locus that passes QC filters.
   ##   maxMissingRate: loci with more than this rate of missing samples fail
@@ -495,6 +513,13 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
   ##                      polygenic score in scoreFile.
   ##   minGtForInternalImput: Minimum number of genotyped samples at a locus for
   ##                          internal imputation to be applied.
+  ##   ignoreFilterField: If true, do not consider the VCF FILTER field when
+  ##                      identifying loci for imputation. If false, loci with
+  ##                      FILTER other than "." or "PASS" will always be imputed.
+  ##
+  ## Returns a boolean indicating if the locus should be used for PRS 
+  ## calculation (return value true), or if it should be discarded (return value
+  ## false).
   let nsamples = genotypeVcf.n_samples
   dosages.setLen(nsamples)
 
@@ -503,12 +528,11 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
         $scoreEntry.stop &
         " is not covered by the sequence coverage BED.  Imputing all dosages " &
         "at this locus.")
-    imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
-    return
-
+    return imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
+  
   let variant = findVariant(scoreEntry.contig, scoreEntry.pos,
                             scoreEntry.refseq, scoreEntry.easeq, genotypeVcf)
-
+  
   if variant.isNil:
     if binomTest(0, nsamples*2, scoreEntry.eaf) < afMismatchPthresh:
       log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos &
@@ -516,21 +540,22 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
           " cohort EAF is 0 in " & $nsamples & " samples.  This is highly" &
           " unlikely given polygenic score EAF of " & $scoreEntry.eaf)
     # This variant is in the covered regions (or no coverage BED was supplied,
-    # in which case we assume it's covered), but is missing from the VCF.  The
-    # implication is that the locus is all homref. Set all dosages to homref and
-    # return
-    let impute_dosage = if scoreEntry.refseq == scoreEntry.easeq: 2.0 else: 0.0
-    for i in 0..dosages.high:
-      dosages[i] = impute_dosage
-    return
-
-  if $variant.FILTER != "." and $variant.FILTER != "PASS":
+    # in which case we assume it's covered), but is missing from the VCF. 
+    # Impute as specified by imputeMethodMissing.
+    if imputeMethodMissing == ImputeMethodMissing.homref:
+      let impute_dosage = if scoreEntry.refseq == scoreEntry.easeq: 2.0 else: 0.0
+      for i in 0..dosages.high:
+        dosages[i] = impute_dosage
+      return true
+    elif imputeMethodMissing == ImputeMethodMissing.ignore:
+      return false
+  
+  if ignoreFilterField == false and $variant.FILTER != "." and $variant.FILTER != "PASS":
     log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos & ":" &
         $scoreEntry.refseq & ":" & $scoreEntry.easeq &
         " has a FILTER flag set (value \"" & $variant.FILTER & "\").  " &
         "Imputing all dosages at this locus.")
-    imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
-    return
+    return imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
 
   # Fetch the raw dosages (values in {NaN, 0., 1., 2.}) from the VCF.
   getRawDosages(dosages, variant, scoreEntry.easeq)
@@ -543,12 +568,7 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
         $scoreEntry.stop & " has " &
         $(missingrate*100) & "% of samples missing a genotype. This exceeds " &
         "the missingness threshold; imputing all dosages at this locus.")
-    imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
-    return
-
-  ##echo "neffectallele.toInt" & $neffectallele.toInt
-  ##echo "(nsamples-nmissing.toInt)*2" & $nsamples & $nmissing.toInt
-  ##echo "scoreEntry.eaf" & $scoreEntry.eaf
+    return imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
 
   if binomTest(neffectallele.toInt, (nsamples-nmissing.toInt)*2,
       scoreEntry.eaf) < afMismatchPthresh:
@@ -562,6 +582,7 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
   imputeSampleDosages(dosages, scoreEntry, neffectallele, ngenotyped,
                       minGtForInternalImput, imputeMethodSample)
 
+  return true
 
 
 ################################################################################
@@ -572,9 +593,10 @@ proc computePolygenicScores*(scores: var seq[float], scoreFile: ScoreFile,
                              genotypeVcf: VCF, restrictToCoveredRgns: bool,
                              coveredIvals: GenomeIntervals,
                              imputeMethodLocus: ImputeMethodLocus,
+                             imputeMethodMissing: ImputeMethodMissing,
                              imputeMethodSample: ImputeMethodSample,
                              maxMissingRate: float, afMismatchPthresh: float,
-                             minGtForInternalImput: int) =
+                             minGtForInternalImput: int, ignoreFilterField: bool) =
   ## Compute polygenic scores.
   ##
   ##   scores: seq[float] to which the scores will be written. Will be resized
@@ -610,16 +632,17 @@ proc computePolygenicScores*(scores: var seq[float], scoreFile: ScoreFile,
   var nloci = 0
   var dosages = newSeqUninitialized[float](nsamples)
   for scoreEntry in scoreFile:
-    getImputedDosages(dosages, scoreEntry, genotypeVcf, restrictToCoveredRgns,
-                      coveredIvals, imputeMethodLocus, imputeMethodSample,
-                      maxMissingRate, afMismatchPthresh, minGtForInternalImput)
-    for i in 0..scores.high:
-       scores[i] += dosages[i]/2.0 * scoreEntry.beta
-    nloci += 1
+    if getImputedDosages(dosages, scoreEntry, genotypeVcf, restrictToCoveredRgns,
+                         coveredIvals, imputeMethodLocus, imputeMethodMissing, 
+                         imputeMethodSample, maxMissingRate, afMismatchPthresh, 
+                         minGtForInternalImput, ignoreFilterField) == true:
+      for i in 0..scores.high:
+        scores[i] += dosages[i] * scoreEntry.beta
+      nloci += 1
 
-  # Average over the PRS loci to match PLINK behaviour
+  # Average over the total ploidy to match PLINK behaviour
   for i in 0..scores.high:
-    scores[i] /= nloci.toFloat
+    scores[i] /= nloci.toFloat*2.0
 
   # Add the offset
   for i in 0..scores.high:
@@ -636,33 +659,44 @@ proc main() =
     nimpress --version
 
   Options:
-    -h --help         Show this screen.
-    --version         Show version.
-    --cov=<path>      Path to a BED file supplying genome regions that have been
-                      genotyped in the genotypes.vcf file.
-    --imp-locus=<m>   Imputation to apply for whole loci which are either not
-                      in the sequenced BED regions, or fail (QUAL flag or too
-                      many samples with missing genotype). Valid values are ps, 
-                      homref, fail [default: ps].
-    --imp-sample=<m>  Imputation to apply for an individual sample with missing 
-                      genotype. Valid values are ps, homref, fail, int_fail, 
-                      int_ps [default: int_ps].
-    --maxmis=<f>      Maximum fraction of samples with missing genotypes allowed
-                      at a locus.  Loci containing more than this fraction of 
-                      samples missing will be considered bad, and have all 
-                      genotypes (even non-missing ones) imputed [default: 0.05].
-    --mincs=<n>       Minimum number of genotypes.vcf samples without missing 
-                      genotype at a locus for this locus to be eligible for 
-                      internal imputation [default: 100].
-    --afmisp=<f>      p-value threshold for warning about allele frequency 
-                      mismatch between the polygenic score and the supplied 
-                      cohort [default: 0.001].
+    -h --help          Show this screen.
+    --version          Show version.
+    --cov=<path>       Path to a BED file supplying genome regions that have been
+                       genotyped in the genotypes.vcf file.
+    --imp-locus=<m>    Imputation to apply for whole loci which are either not
+                       in the sequenced BED regions, or fail (too many samples 
+                       with missing genotype, as set by --maxmis, or failing VCF
+                       QUAL field if --ignorefilt is not set). Valid values are 
+                       ps, homref, fail, ignore [default: ps].
+    --imp-missing=<m>  Imputation to apply for loci which are in the sequenced BED
+                       regions (and thus should have been genotyped), but are 
+                       completely missing from the VCF. Valid values are homref,
+                       ignore [default: homref].
+    --imp-sample=<m>   Imputation to apply for an individual sample with missing 
+                       genotype. Valid values are ps, homref, fail, int_fail, 
+                       int_ps [default: int_ps].
+    --maxmis=<f>       Maximum fraction of samples with missing genotypes allowed
+                       at a locus. Loci containing more than this fraction of 
+                       samples missing will be considered bad, and have all 
+                       genotypes (even non-missing ones) imputed [default: 0.05].
+    --mincs=<n>        Minimum number of genotypes.vcf samples without missing 
+                       genotype at a locus for this locus to be eligible for 
+                       internal imputation [default: 100].
+    --afmisp=<f>       p-value threshold for warning about allele frequency 
+                       mismatch between the polygenic score and the supplied 
+                       cohort [default: 0.001].
+    --ignorefilt       Ignore the VCF FILTER field. If set, all variants in the 
+                       VCF will be used regardless of FILTER field contents. If
+                       not set, variants with a FILTER field other than "." or
+                       "PASS" will always be imputed.
 
   Imputation methods:
   ps        Impute with dosage based on the polygenic score effect allele 
             frequency.
   homref    Impute to homozygous reference genotype.
   fail      Do not impute, but fail. Failed samples will have a score of "nan"
+  ignore    Completely ignore missing loci, as if they were never in the score 
+            definition.
   int_ps    Impute with dosage calculated from non-missing samples in the 
             cohort. At least --mincs non-missing samples must be available for 
             this method to be used, else it will fall back to ps.
@@ -681,12 +715,15 @@ proc main() =
     afMismatchPthresh = parseFloat($args["--afmisp"])
     minInternalImputeCohortSize = parseInt($args["--mincs"])
     imputeMethodLocus = parseEnum[ImputeMethodLocus]($args["--imp-locus"])
+    imputeMethodMissing = parseEnum[ImputeMethodMissing]($args["--imp-missing"])
     imputeMethodSample = parseEnum[ImputeMethodSample]($args["--imp-sample"])
 
-  var genotypeVcf: VCF
-  var scoreFile: ScoreFile
-  var coveredIvals: GenomeIntervals
-  var restrictToCoveredRgns: bool
+  var
+    genotypeVcf: VCF
+    scoreFile: ScoreFile
+    coveredIvals: GenomeIntervals
+    restrictToCoveredRgns: bool
+    ignoreFilterField: bool
 
   if not open(genotypeVcf, $args["<genotypes.vcf>"]):
     log(lvlFatal, "Could not open input VCF file " & $args["<genotypes.vcf>"])
@@ -702,11 +739,15 @@ proc main() =
     if not loadBedIntervals(coveredIvals, $args["--cov"]):
       log(lvlFatal, "Could not open coverage BED file " & $args["--cov"])
 
+  ignoreFilterField = false
+  if args["--ignorefilt"]:
+    ignoreFilterField = true
+
   var scores = newSeqUninitialized[float](0)       # Will be resized as needed
   computePolygenicScores(scores, scoreFile, genotypeVcf, restrictToCoveredRgns,
-                         coveredIvals, imputeMethodLocus, imputeMethodSample,
-                         maxMissingRate, afMismatchPthresh,
-                         minInternalImputeCohortSize)
+                         coveredIvals, imputeMethodLocus, imputeMethodMissing,
+                         imputeMethodSample, maxMissingRate, afMismatchPthresh,
+                         minInternalImputeCohortSize, ignoreFilterField)
 
   for i in 0..scores.high:
     echo $samples(genotypeVcf)[i] & "\t" & $scores[i]

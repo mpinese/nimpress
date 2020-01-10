@@ -1,0 +1,5 @@
+Generated from PLINK v2.00a3LM AVX2 Intel (3 Jan 2020):
+bcftools norm -m- -N set1.vcf.gz | bcftools annotate -I '%CHROM:%POS:%REF:%FIRST_ALT' -Oz -o set1.plink.vcf.gz
+tabix set1.plink.vcf.gz
+./plink-2.00/plink2 --vcf set1.plink.vcf.gz --read-freq set1.plink.freq --score set1.plink.score
+mv plink2.sscores set1.plink200.result

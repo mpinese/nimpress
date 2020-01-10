@@ -1,0 +1,3 @@
+# Temporary test executables, but not their source .nim files
+tests/test_*
+!tests/test_*.nim

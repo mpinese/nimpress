@@ -47,17 +47,109 @@ proc tallyAlleles(rawDosages: seq[float]): (float, float, float) =
   return (ngenotyped, nmissing, neffectallele)
 
 
-proc dbinom (x: int, n: int, p: float): float {.tpub.} =
+## ln(binom(n, k))
+proc lbinom(n:int, k:int): float = lgamma(n.toFloat+1.0) - lgamma(k.toFloat+1.0) - lgamma((n-k).toFloat+1.0)
+
+
+proc dbinom(x: int, n: int, p: float): float {.tpub.} = 
   ## Pr(x successes in n trials | Pr(success) = p)
-  binom(n, x).toFloat * pow(p, x.toFloat) * pow(1.0-p, (n-x).toFloat)
+  result =
+    if x == 0 and p == 0.0 or x == n and p == 1.0:
+      1.0
+    else:
+      exp(lbinom(n, x) + x.toFloat*ln(p) + (n-x).toFloat*ln(1.0-p))
+
+
+proc betacf(a: float, b: float, x: float): float = 
+  ## Evaluates continued fraction approximation to incomplete beta, 
+  ## following NRC algorithm.
+  let
+    qab = a + b
+    qap = a + 1.0
+    qam = a - 1.0
+    FPMIN = 1.0e-30
+    EPS = 3.0e-7
+    MAXIT = 100
+
+  var
+    c = 1.0
+    d = 1.0 - qab*x/qap
+
+  if abs(d) < FPMIN:
+    d = FPMIN
+
+  d = 1.0 / d
+  result = d
+
+  for m in 1..MAXIT:
+    let 
+      mf = m.float
+      aa1 = mf*(b-mf)*x/((qam+2*mf)*(a+2*mf))
+    d = 1.0 + aa1*d
+
+    if abs(d) < FPMIN:
+      d = FPMIN
+
+    c = 1.0 + aa1/c
+    if abs(c) < FPMIN:
+      c = FPMIN
+
+    d = 1.0/d
+    result *= d*c
+
+    let aa2 = -(a+mf)*(qab+mf)*x/((a+2*mf)*(qap+2*mf))
+    d = 1.0 + aa2*d
+
+    if abs(d) < FPMIN:
+      d = FPMIN
+
+    c = 1.0 + aa2/c
+    if abs(c) < FPMIN:
+      c = FPMIN
+
+    d = 1.0/d
+    let del = d*c
+    result *= del
+
+    if abs(del - 1.0) < EPS:
+      return
+
+  result = NaN
+
+
+proc betai(a: float, b: float, x: float): float {.tpub.} = 
+  ## Regularized incomplete beta function, I_x(a,b).  Follows NRC algorithm.
+  doAssert x >= 0.0 and x <= 1.0
+  if a == 0.0 or b == 0.0:
+    return Inf
+  if x == 0.0:
+    result = 0.0
+  elif x == 1.0:
+    result = 1.0
+  else:
+    let bt = exp(lgamma(a+b) - lgamma(a) - lgamma(b) + a*ln(x) + b*ln(1.0-x))
+    if x < (a+1.0) / (a+b+2.0):
+      result = bt*betacf(a, b, x)/a
+    else:
+      result = 1.0 - bt*betacf(b,a,1.0-x)/b
+
 
 
 proc pbinom(x: int, n: int, p: float): float {.tpub.} =
   ## Returns the lower tail binomial probability of x successes or fewer in n
   ## trials, given a success probability of p: Pr(k <= x; n, p)
-  result = 0.0
-  for xi in 0..x:
-    result += dbinom(xi, n, p)
+
+  # Direct calculation, deprecated:
+  # result = 0.0
+  # for xi in 0..x:
+  #   result += dbinom(xi, n, p)
+  result = 
+    if x < 0:
+      0.0
+    elif x == n:
+      1.0
+    else:
+      1.0 - betai(x.toFloat+1.0, (n-x).toFloat, p)
 
 
 proc binomTest(x: int, n: int, p: float): float {.tpub.} =
@@ -65,34 +157,34 @@ proc binomTest(x: int, n: int, p: float): float {.tpub.} =
   ## trials, given success probability of p.  Returns the p value.
 
   # Edge cases
-  #if p == 0.0:
-  #  return if x == 0: 1.0 else: 0.0
-  #elif p == 1.0:
-  #  return if x == n: 1.0 else: 0.0
+  if p == 0.0:
+    return if x == 0: 1.0 else: 0.0
+  elif p == 1.0:
+    return if x == n: 1.0 else: 0.0
 
-  #let
-  #  probx = dbinom(x, n, p)
-  #  expectedVal = n.toFloat*p
+  let
+    probx = dbinom(x, n, p)
+    expectedVal = n.toFloat*p
 
   # Edge case again
-  #if abs(x.toFloat/expectedVal - 1.0) < 1.0e-6:
-  #  return 1.0
+  if abs(x.toFloat/expectedVal - 1.0) < 1.0e-6:
+    return 1.0
 
   # Find the integration limits by enumeration, and use to evaluate the
   # p value. There's probably a more efficient implementation (Newton's?) for
   # large n; consider this if profiling indicates this is a bottleneck.
-  #if x.toFloat < expectedVal:
-  #  var y = 0
-  #  for xi in expectedVal.ceil.toInt..n:
-  #    if dbinom(xi, n, p) <= probx * (1.0+1.0e-7):
-  #      y += 1
-  #  return pbinom(x, n, p) + (1.0 - pbinom(n - y, n, p))
-  #else: # x > expectedVal
-  #  var y = 0
-  #  for xi in 0..(floor(expectedVal).toInt):
-  #    if dbinom(xi, n, p) <= probx * (1.0+1.0e-7):
-  #      y += 1
-  #  return pbinom(y - 1, n, p) + (1.0 - pbinom(x - 1, n, p))
+  if x.toFloat < expectedVal:
+    var y = 0
+    for xi in expectedVal.ceil.toInt..n:
+      if dbinom(xi, n, p) <= probx * (1.0+1.0e-7):
+        y += 1
+    return pbinom(x, n, p) + (1.0 - pbinom(n - y, n, p))
+  else: # x > expectedVal
+    var y = 0
+    for xi in 0..(floor(expectedVal).toInt):
+      if dbinom(xi, n, p) <= probx * (1.0+1.0e-7):
+        y += 1
+    return pbinom(y - 1, n, p) + (1.0 - pbinom(x - 1, n, p))
   return 1.0
 
 

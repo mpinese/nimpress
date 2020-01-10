@@ -1,4 +1,4 @@
-Generated from PLINK v1.90b6.14 64-bit (7 Jan 2020):
+Generated from PLINK v1.90p 64-bit (7 Jan 2020):
 bcftools norm -m- -N set1.vcf.gz | bcftools annotate -I '%CHROM:%POS:%REF:%FIRST_ALT' -Oz -o set1.plink.vcf.gz
 tabix set1.plink.vcf.gz
 ./plink-1.90/plink --vcf set1.plink.vcf.gz --score set1.plink.score

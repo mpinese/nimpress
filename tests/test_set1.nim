@@ -12,8 +12,6 @@ proc isNaN(x:float): bool =
 
 
 proc checkFloats(x: seq[float], target: seq[float]): bool = 
-  echo(x)
-  echo(target)
   if x.len != target.len:
     return false
   for (xi, ti) in zip(x, target):
@@ -38,138 +36,181 @@ suite "set1":
   test "Locus:ps_MMR1 Sample:fail Coverage:ignored":
     computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.ps,
+                           ImputeMethodMissing.homref,
                            ImputeMethodSample.fail,
                            maxMissingRate = 1.0,
                            afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(checkFloats(scores, @[NaN, 0.093, NaN, NaN, NaN, NaN]))
+                           minGtForInternalImput = 100,
+                           ignoreFilterField = false)
+    check(checkFloats(scores, @[NaN, 0.108, NaN, NaN, NaN, NaN]))
 
 
   test "Locus:ps_MMR.2 Sample:fail Coverage:ignored":
     computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.ps, 
+                           ImputeMethodMissing.homref,
                            ImputeMethodSample.fail,
                            maxMissingRate = 0.2, 
                            afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(checkFloats(scores, @[0.0273333333333333, 0.094, NaN, NaN, NaN, -0.156]))
+                           minGtForInternalImput = 100,
+                           ignoreFilterField = false)
+    check(checkFloats(scores, @[0.075166667, 0.1085, NaN, NaN, NaN, -0.0165]))
 
 
   test "Locus:ps_MMR1 Sample:homref Coverage:ignored":
     computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.ps, 
+                           ImputeMethodMissing.homref,
                            ImputeMethodSample.homref,
                            maxMissingRate = 0.2, 
                            afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(checkFloats(scores, @[0.0273333333333333, 0.094, 0.0273333333333333, 0.160666666666667, -0.122666666666667, -0.156]))
+                           minGtForInternalImput = 100,
+                           ignoreFilterField = false)
+    check(checkFloats(scores, @[0.075166667, 0.1085, 0.075166667, 0.141833333, 0.000166667, -0.0165]))
 
 
   test "Locus:ps_MMR1 Sample:int3_ps Coverage:ignored":
     computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.ps, 
+                           ImputeMethodMissing.homref,
                            ImputeMethodSample.int_ps,
                            maxMissingRate = 1.0, 
                            afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 3)
-    check(checkFloats(scores, @[0.0273333333333333, 0.093, 0.0173333333333333, -0.0493333333333333, -0.109333333333333, -0.156]))
+                           minGtForInternalImput = 3,
+                           ignoreFilterField = false)
+    check(checkFloats(scores, @[0.075166667, 0.108, 0.070166667, 0.036833333, 0.006833333, -0.0165]))
 
 
   test "Locus:ps_MMR1 Sample:int100_ps Coverage:ignored":
     computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.ps, 
+                           ImputeMethodMissing.homref,
                            ImputeMethodSample.int_ps,
                            maxMissingRate = 1.0, 
                            afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(checkFloats(scores, @[0.0273333333333333, 0.093, 0.0256666666666667, 0.157666666666667, -0.109333333333333, -0.156]))
+                           minGtForInternalImput = 100,
+                           ignoreFilterField = false)
+    check(checkFloats(scores, @[0.075166667, 0.108, 0.074333333, 0.140333333, 0.006833333, -0.0165]))
 
 
   test "Locus:ps_MMR1 Sample:int100_fail Coverage:ignored":
     computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.ps, 
+                           ImputeMethodMissing.homref,
                            ImputeMethodSample.int_fail,
                            maxMissingRate = 1.0, 
                            afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(checkFloats(scores, @[NaN, 0.093, NaN, NaN, NaN, NaN]))
+                           minGtForInternalImput = 100,
+                           ignoreFilterField = false)
+    check(checkFloats(scores, @[NaN, 0.108, NaN, NaN, NaN, NaN]))
 
 
   test "Locus:homref_MMR1 Sample:fail Coverage:ignored":
     computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.homref,
+                           ImputeMethodMissing.homref,
                            ImputeMethodSample.fail,
                            maxMissingRate = 1.0,
                            afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(checkFloats(scores, @[NaN, 0.073, NaN, NaN, NaN, NaN]))
+                           minGtForInternalImput = 100,
+                           ignoreFilterField = false)
+    check(checkFloats(scores, @[NaN, 0.098, NaN, NaN, NaN, NaN]))
 
 
   test "Locus:homref_MMR.2 Sample:fail Coverage:ignored":
     computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.homref, 
+                           ImputeMethodMissing.homref,
                            ImputeMethodSample.fail,
                            maxMissingRate = 0.2, 
                            afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(checkFloats(scores, @[0.00633333333333334, 0.073, NaN, NaN, NaN, -0.177]))
+                           minGtForInternalImput = 100,
+                           ignoreFilterField = false)
+    check(checkFloats(scores, @[0.064666667, 0.098, NaN, NaN, NaN, -0.027]))
 
 
   test "Locus:homref_MMR1 Sample:homref Coverage:ignored":
     computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.homref, 
+                           ImputeMethodMissing.homref,
                            ImputeMethodSample.homref,
                            maxMissingRate = 1.0, 
                            afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(checkFloats(scores, @[0.00633333333333334, 0.073, 0.00633333333333334, 0.139666666666667, -0.143666666666667, -0.177]))
+                           minGtForInternalImput = 100,
+                           ignoreFilterField = false)
+    check(checkFloats(scores, @[0.064666667, 0.098, 0.064666667, 0.131333333, -0.010333333, -0.027]))
 
 
   test "Locus:fail_MMR1 Sample:fail Coverage:ignored":
     computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.fail,
+                           ImputeMethodMissing.homref,
                            ImputeMethodSample.fail,
                            maxMissingRate = 1.0,
                            afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
+                           minGtForInternalImput = 100,
+                           ignoreFilterField = false)
     check(checkFloats(scores, @[NaN, NaN, NaN, NaN, NaN, NaN]))
 
 
   test "Locus:fail_MMR.2 Sample:fail Coverage:ignored":
     computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
                            ImputeMethodLocus.fail, 
+                           ImputeMethodMissing.homref,
                            ImputeMethodSample.fail,
                            maxMissingRate = 0.2, 
                            afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
+                           minGtForInternalImput = 100,
+                           ignoreFilterField = false)
     check(checkFloats(scores, @[NaN, NaN, NaN, NaN, NaN, NaN]))
 
 
   test "Locus:ps_MMR1 Sample:ps Coverage:filtered":
     computePolygenicScores(scores, scoreFile, genotypeVcf, true, coveredBed, 
                            ImputeMethodLocus.ps,
+                           ImputeMethodMissing.homref,
                            ImputeMethodSample.ps,
                            maxMissingRate = 1.0,
                            afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(checkFloats(scores, @[0.039, 0.039, 0.039, 0.186, -0.111, -0.111]))
+                           minGtForInternalImput = 100,
+                           ignoreFilterField = false)
+    check(checkFloats(scores, @[0.081, 0.081, 0.081, 0.1545, 0.006, 0.006]))
 
 
-  test "Versus PLINK 1.90":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, true, coveredBed, 
-                           ImputeMethodLocus.ps,
-                           ImputeMethodSample.ps,
+  test "Versus PLINK 1.90 defaults":
+    computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
+                           ImputeMethodLocus.ignore,
+                           ImputeMethodMissing.ignore,
+                           ImputeMethodSample.int_ps,
                            maxMissingRate = 1.0,
                            afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
+                           minGtForInternalImput = 0,
+                           ignoreFilterField = true)
+    # Offset of 0.123 is as PLINK does not use external offsets.
     check(checkFloats(scores, @[0.123-0.03, 0.123-0.01, 0.123-0.076, 0.123-0.096, 0.123-0.132, 0.123-0.16]))
 
 
-  test "Versus PLINK 2.00":
-    computePolygenicScores(scores, scoreFile, genotypeVcf, true, coveredBed, 
-                           ImputeMethodLocus.ps,
-                           ImputeMethodSample.ps,
-                           maxMissingRate = 1.0,
-                           afMismatchPthresh = 1.0, 
-                           minGtForInternalImput = 100)
-    check(checkFloats(scores, @[0.123-0.0294, 0.123-0.01, 0.123-0884, 0.123+0.0208, 0.123-0.1394, 0.123-0.1674]))
+  # TODO: Do not fully understand this algorithm in PLINK yet, so setting aside
+  # for now.
+  # test "Versus PLINK 1.90 no-mean-imputation":
+  #   computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
+  #                          ImputeMethodLocus.ignore,
+  #                          ImputeMethodMissing.ignore,
+  #                          ImputeMethodSample.homref,
+  #                          maxMissingRate = 1.0,
+  #                          afMismatchPthresh = 1.0, 
+  #                          minGtForInternalImput = 0,
+  #                          ignoreFilterField = true)
+  #   check(checkFloats(scores, @[0.123-0.0375, 0.123-0.01, 0.123-0.15, 0.123+0.025, 0.123-0.4, 0.123-0.3]))
+
+
+  # test "Versus PLINK 2.00":
+  #   computePolygenicScores(scores, scoreFile, genotypeVcf, false, coveredBed, 
+  #                          ImputeMethodLocus.ps,
+  #                          ImputeMethodMissing.ignore,
+  #                          ImputeMethodSample.ps,
+  #                          maxMissingRate = 1.0,
+  #                          afMismatchPthresh = 1.0, 
+  #                          minGtForInternalImput = 0,
+  #                          ignoreFilterField = true)
+  #   check(checkFloats(scores, @[0.123-0.0294, 0.123-0.01, 0.123-0.884, 0.123+0.0208, 0.123-0.1394, 0.123-0.1674]))

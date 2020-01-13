@@ -570,7 +570,7 @@ proc getImputedDosages(dosages: var seq[float], scoreEntry: ScoreEntry,
         "the missingness threshold; imputing all dosages at this locus.")
     return imputeLocusDosages(dosages, scoreEntry, imputeMethodLocus)
 
-  if not isNan(scoreEntry.eaf) and binomTest(neffectallele.toInt, (nsamples-nmissing.toInt)*2,
+  if not isNaN(scoreEntry.eaf) and binomTest(neffectallele.toInt, (nsamples-nmissing.toInt)*2,
       scoreEntry.eaf) < afMismatchPthresh:
     log(lvlWarn, "Variant " & scoreEntry.contig & ":" & $scoreEntry.pos &
         ":" & $scoreEntry.refseq & ":" & $scoreEntry.easeq & " cohort EAF is " &

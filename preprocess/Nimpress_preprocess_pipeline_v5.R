@@ -2,6 +2,10 @@
 ##Automate data curation pipeline ##
 ####################################
 
+## turn warnings off
+oldw <- getOption("warn")
+options(warn = -1)
+
 ## backend data files needed
 assembly_file <- "/Users/ewilkie/Documents/Polygenic/DataCurationPipeline/GCF_000001405.13_GRCh37_assembly_report.txt"
 
@@ -16,7 +20,6 @@ Usage:
   Nimpress_preprocess_pipeline_v3.R <input> [--bed=<bed> --outpath=<outpath> --out_prefix=<out_prefix> --title=<title> --description=<description> --citation=<citation> --genome_version=<genome version> --offset=<offset> ]  
   Nimpress_preprocess_pipeline_v3.R (-h | --help)
   Nimpress_preprocess_pipeline_v3.R --version
-
 Options:
   -h --help                         Show this screen.
   --version                         Show version.
@@ -28,7 +31,6 @@ Options:
   --citation=<citation>             Data source [default: no citation]
   --genome_version=<genome version> Version of genome [default: GRCh37]
   --offset=<offset>                 Offset for NIMPRESS [default: 0.0]
-
 Arguments:
     input     text file containing risk loci file in template format
     
@@ -50,6 +52,9 @@ pacman::p_load(rentrez,bedr,LDlinkR,stringr,GenomicRanges)
 
 ela <- Sys.time() 
 
+#arguments <- list()
+#arguments$bed <- "/Users/ewilkie/Documents/Polygenic/DataCurationPipeline/mgrb_tier12.bed"
+#arguments$input <- "./Data/Evans_Scott_2014_Table1.csv"
 
 ###################
 ## Initial setup ##
@@ -77,12 +82,17 @@ if(arguments$bed != "NULL"){
 
 test_file <- read.table(arguments$input, sep=",", header=T)
 
-## remove blank spaces
+## remove blank rows
 blank <- which(test_file[,1] == "")
 na <- which(is.na(test_file[,1]))
 rm_blank <- c(blank, na)
 if(length(rm_blank) > 0){
  test_file <- test_file[-rm_blank,]
+}
+
+## rmeove blank columns
+if(ncol(test_file) > 6){
+  test_file <- test_file[,-(7:ncol(test_file))]
 }
 
 ## remove all leading and trailing blank spaces
@@ -144,32 +154,39 @@ getrsID_info <- function(rsid_input){
   g9 <- cbind(g5,g8)
   rmg <- gsub("[^0-9]", "", g9$START)
   g9$START <- rmg
-  colnames(g9)[3:4] <- c("REF_Allele","ALT_Allele")
+  if(!is.null(g9$g8)){
+    g9 <- g9[-which(g9$g8 == "del"),]
+  }
+  if(nrow(g9) == 0 ){
+    return(NA)   
+  }else{
+    g10 <- g9
+    colnames(g10)[3:4] <- c("REF_Allele","ALT_Allele")
+    
+    ## subset to only NC
+    g11 <- g10[grep("^NC",  g10[,1]),]
+    
+    ## extract CHR
+    g12 <- gsub("NC_0+","",g11[,1])
+    CHR <- gsub("\\.[0-9]*", "", g12)
+    
+    g13 <- data.frame(g11$assembly, CHR, g11$START, g11$REF_Allele, g11$ALT_Allele)
+    
+    ## Get right Assembly from SNP
+    inter <- intersect(g13[,1], assembly[,2])
+    g14 <- unique(g13[grep(inter,g13[,1]),])
+    g15 <- g14[,-1]
+    ## multiple Alt Alleles are on different lines 
+    g16<- cbind(rsid_input, g15)
+    colnames(g16) <- c("rsID", "CHR", "START", "REF.ALLELE", "ALT.ALLELE")
+    
+    final_snp$all.alleles <- g16
+    
+    g17 <-c(as.vector(unique(g16$CHR)), as.vector(unique(g16$START)), rsid_input)
+    final_snp$rsID.loc <- g17
   
-  ## subset to only NC
-  g10 <- g9[grep("^NC",  g9[,1]),]
-  
-  ## extract CHR
-  g11 <- gsub("NC_0+","",g10[,1])
-  CHR <- gsub("\\.[0-9]*", "", g11)
-  
-  g12 <- data.frame(g10$assembly, CHR, g10$START, g10$REF_Allele, g10$ALT_Allele)
-  
-  ## Get right Assembly from SNP
-  inter <- intersect(g12[,1], assembly[,2])
-  g13 <- unique(g12[grep(inter,g12[,1]),])
-  g14 <- g13[,-1]
-  ## multiple Alt Alleles are on different lines 
-  g15<- cbind(rsid_input, g14)
-  colnames(g15) <- c("rsID", "CHR", "START", "REF.ALLELE", "ALT.ALLELE")
-  
-  final_snp$all.alleles <- g15
-  
-  g16 <-c(as.vector(unique(g15$CHR)), as.vector(unique(g15$START)), rsid_input)
-  final_snp$rsID.loc <- g16
-  
-  return(final_snp)
-
+    return(final_snp)
+  }
 }
 
 
@@ -179,8 +196,10 @@ rsID_genome <- list()
 rsID_loc <- list()
 for (rsid in 1: length(rsIDu)){
   res <- getrsID_info(rsIDu[rsid])
-  rsID_loc[[rsid]] <- res$rsID.loc
-  rsID_genome[[rsid]] <- res$all.alleles
+  if(!is.na(res)){
+    rsID_loc[[rsid]] <- res$rsID.loc
+    rsID_genome[[rsid]] <- res$all.allele
+  }
 }
 
 rsID_loc_df <- do.call(rbind, rsID_loc)
@@ -260,11 +279,15 @@ getLDproxy <- function(snp){
     for(i in 1:length(coord_check)){
       if(arguments$bed == "NULL"){
         getALT <- getrsID_info(my_proxies_keep3[i,1])
-        ALTcol <- paste(sort(as.vector(getALT$all.alleles$ALT.ALLELE)), collapse=",")
-        Alleles <- paste("(", unique(as.vector(getALT$all.alleles$REF.ALLELE)) , "/", ALTcol, ")", sep="")
-        new_rd <- c(as.matrix(my_proxies_keep3[i,1:2]), Alleles)
-        rsid_keep <- c(rsid_keep,as.vector(my_proxies_keep3[i,"RS_Number"]))
-        break
+        if(!is.na(getALT)){
+          ALTcol <- paste(sort(as.vector(getALT$all.alleles$ALT.ALLELE)), collapse=",")
+          Alleles <- paste("(", unique(as.vector(getALT$all.alleles$REF.ALLELE)) , "/", ALTcol, ")", sep="")
+          new_rd <- c(as.matrix(my_proxies_keep3[i,1:2]), Alleles)
+          rsid_keep <- c(rsid_keep,as.vector(my_proxies_keep3[i,"RS_Number"]))
+          break
+        }else{
+          next
+        }
       }else{
         coord <- coord_check[i]
         snp_chr <- sub("chr","" , sub('\\:.*', '', coord))
@@ -274,12 +297,16 @@ getLDproxy <- function(snp){
         if(length(hits@from) > 0){
           if(as.vector(my_proxies_keep3[i,"RS_Number"]) %!in% rsid_keep){
             ## need to get all alternative allelse fot this new rsID 
-            getALT <- getrsID_info(my_proxies_keep3[i,1])
-            ALTcol <- paste(sort(as.vector(getALT$all.alleles$ALT.ALLELE)), collapse=",")
-            Alleles <- paste("(", unique(as.vector(getALT$all.alleles$REF.ALLELE)) , "/", ALTcol, ")", sep="")
-            new_rd <- c(as.matrix(my_proxies_keep3[i,1:2]), Alleles)
-            rsid_keep <- c(rsid_keep,as.vector(my_proxies_keep3[i,"RS_Number"]))
-            break
+            getALT <- getrsID_info(as.vector(my_proxies_keep3[i,1]))
+            if(!is.na(getALT)){
+              ALTcol <- paste(sort(as.vector(getALT$all.alleles$ALT.ALLELE)), collapse=",")
+              Alleles <- paste("(", unique(as.vector(getALT$all.alleles$REF.ALLELE)) , "/", ALTcol, ")", sep="")
+              new_rd <- c(as.matrix(my_proxies_keep3[i,1:2]), Alleles)
+              rsid_keep <- c(rsid_keep,as.vector(my_proxies_keep3[i,"RS_Number"]))
+              break
+            }else{
+              next
+            }
           }
         }else{
           new_rd <- NA
@@ -499,9 +526,9 @@ for(type in 1:length(out)){
   ## file
   u <- gsub("\\s+", "_", unique(out[[type]]$Subtype))
   filen <- paste(arguments$outpath,"/Output/NIMPRESS/", arguments$out_prefix, "_", u, "_NIMPRESS_input.txt", sep="")
-
+  ## if file exisits, delete content
   ## title
-  write(arguments$title,file=filen, append=TRUE)
+  write(arguments$title,file=filen, append=FALSE)
   ## description
   write(arguments$description,file=filen, append=TRUE)
   ## citation

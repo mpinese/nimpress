@@ -1,0 +1,12 @@
+Ostrom_Barnholtz-Sloan_2018_suppl_table4
+ Ostrom + Barnholtz-Sloan 2018 Supplementary Table 4.
+ DOI: 10.1002/ijc.31759 PMID: 30152087
+GRCh37
+0.0
+7	55134872	A	A	-0.48	NaN
+7	55159349	A	A	-1.08	NaN
+8	130645692	A	G	-3.21	NaN
+9	22032152	T	G	0.17	NaN
+11	118477367	A	A	1.44	NaN
+17	7571752	T	G	-0.61	NaN
+20	62312299	T	C	0.79	NaN

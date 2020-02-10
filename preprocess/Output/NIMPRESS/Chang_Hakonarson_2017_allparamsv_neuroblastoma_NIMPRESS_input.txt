@@ -1,0 +1,7 @@
+Chang_Hakonarson_2017_Table1
+ Table 1 Association results for the top three genotyped SNPs at 11q22.2
+ nDOI: 10.1038/s41467-017-00408-8 PMID: 28924153
+GRCh37
+0.0
+11	102463359	G	C	1.016317	NaN
+11	102488131	A	G	-0.871293365943419	NaN

@@ -36,5 +36,5 @@ while IFS= read -r line || [[ -n "$line" ]]; do
 
 	Rscript Nimpress_preprocess_pipeline_V5.R ./Data/$DATA --out_prefix "$PREFIX" --bed /Users/ewilkie/Documents/Polygenic/DataCurationPipeline/mgrb_tier12.bed --title "$TITLE" --citation "$CIT" --description "$DEC"
 
-done < inparams2.txt
+done < $1
 

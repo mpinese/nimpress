@@ -22,6 +22,6 @@ $DEC -> Data description
 ##############
 
 use the following script
-Batch_preprocess.sh inparams.txt
+bash Batch_preprocess.sh inparams.txt
 
 where inparams contains one line per file. Each line contains: filename, Prefix, citation and description

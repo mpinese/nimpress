@@ -7,7 +7,7 @@ oldw <- getOption("warn")
 options(warn = -1)
 
 ## backend data files needed
-assembly_file <- "/Users/ewilkie/Documents/Polygenic/DataCurationPipeline/GCF_000001405.13_GRCh37_assembly_report.txt"
+assembly_file <- "../Suppl/GCF_000001405.13_GRCh37_assembly_report.txt"
 
 pacman::p_load(docopt)
 

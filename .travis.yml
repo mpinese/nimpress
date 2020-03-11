@@ -1,4 +1,5 @@
-language: c
+language: minimal
+dist: bionic
 
 services:
   - docker

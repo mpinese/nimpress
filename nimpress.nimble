@@ -21,3 +21,6 @@ requires "lapper >= 0.1.5"
 task test, "Run the test suite":
   exec "nim c -r -d:testing tests/test_set1.nim"
   exec "nim c -r -d:testing tests/test_stats.nim"
+
+task testfail, "Run a deliberately failing test suite, to check CI failure detection":
+  exec "nim c -r -d:testing tests/test_fail.nim"

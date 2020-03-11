@@ -7,9 +7,3 @@ services:
 before_install:
   - docker build -t mpinese/nimpress .
   - docker run --entrypoint nimble mpinese/nimpress test
-
-deploy:
-  provider: script
-  script: bash docker_push
-  on:
-    branch: master

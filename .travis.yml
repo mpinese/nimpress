@@ -6,7 +6,7 @@ services:
 
 before_install:
   - docker build -t mpinese/nimpress .
-  - docker run --entrypoint nimble mpinese/nimpress testfail
+  - docker run --entrypoint nimble mpinese/nimpress test
 
 # script:
 #   echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin

@@ -1,5 +1,7 @@
 # nimpress: Polygenic score calculation direct from VCF/BCF
 
+[![Build Status](https://travis-ci.org/mpinese/nimpress.svg?branch=master)](https://travis-ci.org/mpinese/nimpress)
+
 ```
   Usage:
     nimpress [options] <scoredef> <genotypes.vcf>

@@ -1,9 +1,54 @@
 language: minimal
+os: linux
 dist: bionic
 
 services:
   - docker
 
-before_install:
-  - docker build -t mpinese/nimpress .
-  - docker run --entrypoint nimble mpinese/nimpress test
+stages:
+  - name: test
+  - name: deploy static dev
+  - name: deploy static release
+
+jobs:
+  include:
+    - stage: test
+      name: "Test with Docker image"
+      script:
+        - docker build -t mpinese/nimpress .
+        - docker run --entrypoint nimble mpinese/nimpress test
+    - stage: deploy static develop
+      name: "Build and deploy static binary: development"
+      script:
+        - wget https://github.com/brentp/hts-nim/releases/download/v0.2.8/hts_nim_static_builder
+        - chmod +x hts_nim_static_builder
+        - ./hts_nim_static_builder -s ./src/nimpress.nim -n ./nimpress.nimble
+        - mv nimpress nimpress-develop-x86_64
+      deploy:
+        provider: releases
+        edge: true
+        token: $GITHUB_TOKEN
+        file: nimpress-develop-x86_64
+        skip_cleanup: true
+        draft: true
+        overwrite: true
+        on:
+          branch: develop
+    - stage: deploy static release
+      name: "Build and deploy static binary: release"
+      script:
+        - wget https://github.com/brentp/hts-nim/releases/download/v0.2.8/hts_nim_static_builder
+        - chmod +x hts_nim_static_builder
+        - ./hts_nim_static_builder -s ./src/nimpress.nim -n ./nimpress.nimble
+        - mv nimpress nimpress-v${TRAVIS_TAG}-x86_64
+      deploy:
+        provider: releases
+        edge: true
+        token: $GITHUB_TOKEN
+        file: nimpress-v${TRAVIS_TAG}-x86_64
+        skip_cleanup: true
+        draft: false
+        overwrite: false
+        on:
+          tags: true
+          branch: master

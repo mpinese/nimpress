@@ -1,8 +1,0 @@
-Chang_Hakonarson_2017_Table1.csv,Chang_Hakonarson_2017_allparamsv, nDOI: 10.1038/s41467-017-00408-8 PMID: 28924153, Table 1 Association results for the top three genotyped SNPs at 11q22.2
-3.0_Cozen_McKay2014_Suppl_Tabular_pdftkfixed_manual_curated_Rinput.csv,3.0_Cozen_McKay2014_allparamsv,nDOI: 10.1038/ncomms4856 PMID: 24920014,Cozen + McKay 2014 suppl Variants Supplementary Table 2
-Ellinghaus_Franke_2012_Table2.csv,Ellinghaus_Franke_2012_Table2_allparamsv,nDOI: 10.1038/leu.2011.302 PMID: 22076464,Ellinghaus + Franke 2012 Table2
-Evans_Scott_2014_Table1.csv,Evans_Scott_2014_Table1_allparamsv, DOI: 10.1371/journal.pone.0110255 PMCID: PMC4195717,Evans + Scott 2014 Table 1 Variants
-Melin_Bondy_2017_Suppl_Table4.csv,Melin_Bondy_2017_Suppl_Table4_allparamsv,DOI: 10.1038/ng.3823 PMID: 28346443,Melin + Bondy 2017 Supplementary Table 4
-Ostrom_Barnholtz-Sloan_2018_suppl_table4.csv,Ostrom_Barnholtz-Sloan_2018_suppl_table4_allparamsv, DOI: 10.1002/ijc.31759 PMID: 30152087, Ostrom + Barnholtz-Sloan 2018 Supplementary Table 4.
-Vijayakrishnan_Houlston_2018_NatCom_Suppl11.csv,Vijayakrishnan_Houlston_2018_NatCom_Suppl11_allparamsv,DOI: 10.1038/ncomms4856 PMID: 29632299,Vijayakrishnan + Houlston 2018 NatCom Supplementary Table 11.
-Wiemels_Ma_2018_Suppl_table2.csv,Wiemels_Ma_2018_Table2_allparamsv, DOI: 10.1038/s41467-017-02596-9 PMCID: PMC5773513,Wiemels Ma 2018 Supplementary Table 2 

@@ -1,7 +1,0 @@
-Evans_Scott_2014_Table1
-Evans + Scott 2014 Table 1 Variants
- DOI: 10.1371/journal.pone.0110255 PMCID: PMC4195717
-GRCh37
-0.0
-10	63722895	C	C	0.48858	NaN
-7	50478627	A	G	0.5247285	NaN

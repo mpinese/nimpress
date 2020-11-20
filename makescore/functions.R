@@ -39,7 +39,7 @@ bedfile_to_Granges <- function(ovlp){
 
 check_gwas_file <- function(input){
   
-  gwas_file <- read.table(input, sep=",", header=T, colClasses=c("character","character","numeric", "numeric"))
+  gwas_file <- read.table(input, sep="\t", header=T, colClasses=c("character","character","numeric", "numeric"))
   
   ## remove blank rows
   blank <- which(gwas_file[,1] == "")
@@ -72,26 +72,13 @@ check_gwas_file <- function(input){
   }
   
   ## check if valid nucleotides
-  nva <- which(gwas_file$Risk_allele %!in% c("A", "T", "G", "C"))
+  nva <- which(gwas_file$effectAllele %!in% c("A", "T", "G", "C"))
   if(length(nva) > 0){
     stop(paste("Line ", paste(unique(nva), collapse=","), " does not contain a valid risk allele", sep=""))
   }
   
-  ## Format Effect size
-  or.ind <- grep("OR", colnames(gwas_file))
-  beta.ind <- grep("Beta", colnames(gwas_file))
-  
-  if(length(or.ind) == 1){
-    OR <- as.vector(gwas_file[,or.ind])
-    gwas_file[,or.ind] <- log(as.numeric(sub('\\(.*', '', OR)))
-    colnames(gwas_file)[or.ind] <- "Effect.size"
-    message("Coverting OR to BETA")
-  }else if(length(beta.ind) == 1){
-    colnames(gwas_file)[beta.ind] <- "Effect.size"
-  }
-  
   message("All rsID ok")
-  message("All Risk_allele ok")
+  message("All effectAllele ok")
   return(gwas_file)
 }  
 

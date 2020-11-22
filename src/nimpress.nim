@@ -705,7 +705,7 @@ proc main() =
             this method to be used, else it will fall back to fail.
   """
 
-  let args = docopt(doc, version = "nimpress 0.0.1")
+  let args = docopt(doc, version = "nimpress 1.0.0")
 
   var consoleLog = newConsoleLogger()
   addHandler(consoleLog)

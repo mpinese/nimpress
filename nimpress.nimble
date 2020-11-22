@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.0.1"
+version       = "1.0.0"
 author        = "Mark Pinese <mpinese@ccia.org.au>"
 description   = "Calculate polygenic scores from VCFs"
 license       = "MIT"

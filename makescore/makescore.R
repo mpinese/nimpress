@@ -3,55 +3,78 @@
 ##########################################
 
 ## turn warnings off
-oldw <- getOption("warn")
-options(warn = -1)
+# oldw <- getOption("warn")
+# options(warn = -1)
 
-## install package installation library
-if (!require("pacman")) install.packages("pacman")
+suppressPackageStartupMessages(library(docopt))
 
-## load command option library
-pacman::p_load(docopt)
+## load processing functions files
+source("functions.R")
 
 #############
 ## docopts ##
 #############
 
-'NIMPRESS preprocess
-Usage:
-  Nimpress_preprocess.R --file=<file_to_process> --description=<description> --citation=<citation> [(--LDproxy_pop=<BG population> --LDproxy_token=<token>) (--remove_blacklisted_regions | --blacklisted_regions_file=<bed>) --outpath=<outpath> --offset=<offset>]  
-  Nimpress_preprocess.R --file=<file_to_process> --description=<description> --citation=<citation> --remove_blacklisted_regions
-  Nimpress_preprocess.R --file=<file_to_process> --description=<description> --citation=<citation> --blacklisted_regions_file=<bed>
-  Nimpress_preprocess.R --file=<file_to_process> --description=<description> --citation=<citation> --remove_blacklisted_regions --LDproxy_pop=<BG population> --LDproxy_token=<token>
-    Nimpress_preprocess.R --file=<file_to_process> --description=<description> --citation=<citation> --blacklisted_regions_file=<bed> --LDproxy_pop=<BG population> --LDproxy_token=<token>
-  Nimpress_preprocess.R --file=<file_to_process> 
-  Nimpress_preprocess.R (-h | --help)
-  Nimpress_preprocess.R --version
-Arguments:
-    --file=<file_to_process>     See Example folder for completed template
-                                 Text file containing risk loci file in template format:
-                                 rsID,Risk_allele,Freq,<OR or BETA>
-                                 <rsID> = the dbSNP Reference SNP cluster ID
-                                 <Risk_allele> = the allele associated with the trait or disease investigated
-                                 <Freq> = popultation frequency of the risk allele
-                                 <OR> or <BETA> = Odds ratio or beta respectively, all value need to be of the same type
-    --description=<description>  Description of data
-    --citation=<citation>        Data source citation  
-     
-Options:
-  -h --help                         Show this screen.
-  --version                         Show version.
-  --outpath=<outpath>               Path to output location [DEFAULT: ./Nimpress_preprocess_Output]
-  --LDproxy_pop=<BG population>     Background populations for LDproxy
-  --LDproxy_token=<token>           Generate token via https://ldlink.nci.nih.gov/?tab=apiaccess
-  --remove_blacklisted_regions      Difficult to sequence regions from GIAB for rsID removal/substitution
-  --blacklisted_regions_file=<bed>   Provide custom bedfile for rsID removal/substitution 
-  --offset=<offset>                 Offset for NIMPRESS [DEFAULT: 0.0]
+'makescore.R: Generate an input score file for nimpress from GWAS summary statistics.
 
-    
+Usage:
+  makescore.R [options] <infile> <outdir>
+  makescore.R (-h | --help)
+  makescore.R --version
+
+Arguments:
+  <infile>                    Path to the file containing risk loci file in template format (see below).
+  <outdir>                    Path to output folder. This will be created if it doesn\'t exist.
+
+General options:
+  -h --help                   Show this screen.
+  --version                   Show version.
+
+Output options:
+  --description="<string>"    Description of the polygenic score, will be copied into the output file. [default: ""]
+  --citation="<string>"       Citation of the polygenic score, will be copied into the output file. [default: ""]
+  --offset=<offset>           Offset of the polygenic score. This value will be added to calculated scores (score = sum(dosage*weight) + offset). [default: 0.0]
+
+Blacklist options:
+  --blacklist=<file>          BED file of blacklist genome regions. Loci falling in these regions will either be imputed with proxy SNPs that are not in blacklist regions (if LDproxy_token and LDproxy_pop are supplied), or dropped (otherwise).
+
+Proxy SNP imputation options:
+  --LDproxy_token=<string>    LDproxy API token. Generate at https://ldlink.nci.nih.gov/?tab=apiaccess
+  --LDproxy_pop=<string>      Background populations for LDproxy (eg. GBR)
+
+
+Input file format
+=================
+  Tab-delimited, with a header and columns:
+    rsID                      dbSNP SNP cluster ID for this score locus.
+    effectAllele              The allele in this SNP associated with a differential trait phenotype or risk.
+    effectAlleleFrequency     The population frequency (ideally, in the population of interest) of the effect allele.
+    weight                    The contribution of a single copy of EffectAllele to the trait phenotype or risk.
+
+  The final score is calculated as score = sum(dosage*weight) + offset, where dosage is the number of copies
+  of the EffectAllele in each individual (dosage \\in {0, 1, 2}). Typically, weight is the reported Beta values
+  (for continuous traits), or log odds (for binary traits / risk), of a GWAS.
+
+  An example score file based on Wood et al (2014) can be found in example/wood_height_input.tsv.
+
+
+Examples
+========
+1. Basic use, converts GWAS summary statistics to a polygenic score without any imputation:
+   
+   Rscript makescore.R example/wood_height_input_small.tsv example/wood_height_small_example1
+
+2. Convert GWAS summary statistics, removing loci falling within blacklist regions:
+
+   Rscript makescore.R --blacklist=example/wood_height_blacklist.bed example/wood_height_input_small.tsv example/wood_height_small_example2
+
+3. Convert GWAS summary statistics, imputing loci falling within blacklist regions to linked loci outside of blacklist regions:
+
+   Rscript makescore.R --blacklist=example/wood_height_blacklist.bed --LDproxy_token=<token> --LDproxy_pop=GBR example/wood_height_input_small.tsv example/wood_height_small_example3
+
 ' -> doc
 
-arguments <- docopt(doc, version = 'NIMPRESS Preprocess for R version 4.0.0 (2020-04-24)\n')
-
+arguments <- docopt(doc, version='nimpress makescore v1.0\n', strict=FALSE)
 
 ###############################################################################################
 ###############################################################################################
@@ -59,25 +82,22 @@ arguments <- docopt(doc, version = 'NIMPRESS Preprocess for R version 4.0.0 (202
 ###############################################################################################
 ###############################################################################################
 
-## load processing functions files
-source("Nimpress_preprocess_functions.R")
+message("[1/12] Loading libraries")
 
-###############
-## libraries ##
-###############
-
-## LDlinkR gets loaded later if used since it takes a while to install
-message("[1/12] Loading libraries...")
-pacman::p_load(data.table,GenomicRanges,rentrez,BSgenome.Hsapiens.UCSC.hg19)
+suppressPackageStartupMessages(library(BSgenome.Hsapiens.UCSC.hg19))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(GenomicRanges))
+suppressPackageStartupMessages(library(LDlinkR))
+suppressPackageStartupMessages(library(rentrez))
 
 ######################
 ## Check input file ##
 ######################
 
-message(paste("[2/12] Checking file: ", arguments$file, sep="" ))
+message(paste("[2/12] Checking file: ", arguments$infile, sep="" ))
 
 ## check and format input file
-gf_ok <- check_gwas_file(arguments$file)
+gf_ok <- check_gwas_file(arguments$infile)
 
 ##################
 ## setup outdir ##
@@ -85,13 +105,13 @@ gf_ok <- check_gwas_file(arguments$file)
 message("[3/12] Setting up output dir...")
 
 ## get file name from input file
-output_name1 <- gsub(".*/","", arguments$file)
-output_name2 <- gsub("\\.csv","", output_name1)
-if(is.null(arguments$output)){
+output_name1 <- gsub(".*/","", arguments$infile)
+output_name2 <- gsub("\\.tsv","", output_name1)
+if(is.null(arguments$outdir)){
   outdir <- "Nimpress_preprocess_Output"
   dir.create(file.path(getwd(),outdir), showWarnings = FALSE)
 }else{
-  outdir <- arguments$output
+  outdir <- arguments$outdir
   dir.create(file.path(outdir), showWarnings = FALSE)
 }
 
@@ -101,22 +121,8 @@ if(is.null(arguments$output)){
 
 message("[4/12] Setting up blacklisted genome file...")
 ## this is for inbuilt blacklist file
-if(!is.null(arguments$remove_blacklisted_regions) && arguments$remove_blacklisted_regions == TRUE ){
-  ## dl file if doesn't already exist
-  tmp <- paste(getwd(), "/Suppl/GRCh37_alldifficultregions.bed.gz" , sep="")
-  if(file.exists(tmp)){
-    bedfile <- read.csv(gzfile(tmp),sep="\t", header=F,stringsAsFactors=FALSE, skip=1)
-    gr <- bedfile_to_Granges(bedfile)
-  }else{
-    ## downlaod and read in file 
-    url <- "ftp://ftp-trace.ncbi.nlm.nih.gov/giab/ftp/release/genome-stratifications/v2.0/GRCh37/union/GRCh37_alldifficultregions.bed.gz"
-    download.file(url,tmp)
-    bedfile <- read.csv(gzfile(tmp),sep="\t", header=F,stringsAsFactors=FALSE, skip=1)
-    gr <- bedfile_to_Granges(bedfile)
-  }
-## this is for custom blacklist file provided  
-}else if(!is.null(arguments$blacklisted_regions_file)){
-  bedfile <- arguments$blacklisted_regions_file
+if(!is.null(arguments$blacklist)){
+  bedfile <- arguments$blacklist
   cust.bed <- fread(bedfile,sep="\t", header=TRUE,stringsAsFactors=FALSE)
   gr <- bedfile_to_Granges(cust.bed)
 }else{
@@ -131,7 +137,6 @@ message("[5/12] Testing LDproxy parameters... ")
 ## check if LDproxy is on
 LDproxy_flag = "OFF"
 if(!is.null(arguments$LDproxy_pop) & !is.null(arguments$LDproxy_token)){
-  pacman::p_load(LDlinkR)
   ## to check LDproxy pop input - get all available pops from package
   pop <- list_pop()
   bgpc <- pop$pop_code
@@ -174,7 +179,7 @@ colnames(assembly) <- c("CHR", "NC_CHR")
 #####################
 #####################
 
-message(paste("[7/12] Processing file: ", arguments$file," ...this may take a while...", sep="" ))
+message(paste("[7/12] Processing file: ", arguments$infile," ...this may take a while...", sep="" ))
 
 ##########################################
 ## get rdID genomic location from dbSNP ##
@@ -195,7 +200,7 @@ rs.info.na <- which(is.na(rsID_loc_df$CHR))
 if(length(rs.info.na) != 0 ){
   rs.rm <- rsID_loc_df[rs.info.na,] 
   rs.rm.df <- cbind(rs.rm,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA)
-  colnames(rs.rm.df) <- c("rsID", "CHR.x","START.x","REF.ALLELE.x","ALT.ALLELE.x","SEQ","strand","ambiguous","Risk_allele","risk_type","flipped","bedcov","RSID_Proxy","CHR.y","START.y","REF.ALLELE.y","ALT.ALLELE.y")
+  colnames(rs.rm.df) <- c("rsID", "CHR.x","START.x","REF.ALLELE.x","ALT.ALLELE.x","SEQ","strand","ambiguous","effectAllele","risk_type","flipped","bedcov","RSID_Proxy","CHR.y","START.y","REF.ALLELE.y","ALT.ALLELE.y")
   rsID.df <- rsID_loc_df[-rs.info.na,]
 }else{
   rs.rm.df <- NULL
@@ -249,7 +254,7 @@ SNP_is <- cbind(SNP_info, strand=unlist(strand), ambiguous= unlist(ambig))
 message("[8/12] Defining ambigious SNPs...")
 
 ## Check whether Risk ALlele is REF or ALT or neither (wrong)/ Flipped 
-rsm <- merge(SNP_is, gf_ok[,c("rsID","Risk_allele")], by="rsID")
+rsm <- merge(SNP_is, gf_ok[,c("rsID","effectAllele")], by="rsID")
 stp2 <- strsplit(rsm$ALT.ALLELE, "|")
 
 risk_type <- list()
@@ -263,32 +268,32 @@ for(rll in 1:nrow(rsm)){
   }
   ## if ambigious flag is D or N - first check for ambigious then for check type and flipped
   else{
-    if(rsm[rll,"Risk_allele"] == complement(rsm[rll,"REF.ALLELE"]) & rsm[rll,"Risk_allele"] %in% stp2[[rll]]){
+    if(rsm[rll,"effectAllele"] == complement(rsm[rll,"REF.ALLELE"]) & rsm[rll,"effectAllele"] %in% stp2[[rll]]){
       risk_type[[rll]] = NA
       flipped[[rll]] = NA
       rsm[rll,"ambiguous"] = "Y"
     }
     # Risk == REF and  == complemnt(ALT)
     # same as complment(risk) == complment(REF) & ALT
-    else if(complement(rsm[rll,"Risk_allele"]) == complement(rsm[rll,"REF.ALLELE"]) & complement(rsm[rll,"Risk_allele"]) %in% stp2[[rll]]){
+    else if(complement(rsm[rll,"effectAllele"]) == complement(rsm[rll,"REF.ALLELE"]) & complement(rsm[rll,"effectAllele"]) %in% stp2[[rll]]){
       risk_type[[rll]] = NA
       flipped[[rll]] = NA
       rsm[rll,"ambiguous"] = "Y"
     }
-    else if(rsm[rll,"Risk_allele"] == rsm[rll,"REF.ALLELE"]){
+    else if(rsm[rll,"effectAllele"] == rsm[rll,"REF.ALLELE"]){
       risk_type[[rll]] = "REF"
       flipped[[rll]] = "N"
       rsm[rll,"ambiguous"] = "N"
-    }else if (rsm[rll,"Risk_allele"] %in% stp2[[rll]]){
+    }else if (rsm[rll,"effectAllele"] %in% stp2[[rll]]){
       risk_type[[rll]] = "ALT"
       flipped[[rll]] = "N"
       rsm[rll,"ambiguous"] = "N"
       ## complement means flipped
-    }else if(complement(rsm[rll,"Risk_allele"]) == rsm[rll,"REF.ALLELE"]){
+    }else if(complement(rsm[rll,"effectAllele"]) == rsm[rll,"REF.ALLELE"]){
       risk_type[[rll]] = "REF"
       flipped[[rll]] = "Y"
       rsm[rll,"ambiguous"] = "N"
-    }else if (complement(rsm[rll,"Risk_allele"]) %in% stp2[[rll]]){
+    }else if (complement(rsm[rll,"effectAllele"]) %in% stp2[[rll]]){
       risk_type[[rll]] = "ALT"
       flipped[[rll]] = "Y"
       rsm[rll,"ambiguous"] = "N"
@@ -324,22 +329,22 @@ if(is.null(bedfile)){
 message("[10/12] Coverage and LDproxy... this will take a while... ")
 
 ## if no bedfile all bedcov will equal FALSE, if no fall in region no sub needed
-if(length(unique(urercov$bedcov)) == 1 & unique(urercov$bedcov) == FALSE){
+if(length(unique(urercov$bedcov)) == 1 && unique(urercov$bedcov) == FALSE){
   ## append empty columns for downstream flag adding 
   LDproxy_out <- cbind(urercov,NA,NA,NA,NA,NA)
-  colnames(LDproxy_out) <- c("rsID", "CHR.x", "START.x", "REF.ALLELE.x", "ALT.ALLELE.x", "SEQ", "strand", "ambiguous", "Risk_allele", "risk_type", "flipped", "bedcov", "RSID_Proxy", "CHR.y", "START.y", "REF.ALLELE.y", "ALT.ALLELE.y")
+  colnames(LDproxy_out) <- c("rsID", "CHR.x", "START.x", "REF.ALLELE.x", "ALT.ALLELE.x", "SEQ", "strand", "ambiguous", "effectAllele", "risk_type", "flipped", "bedcov", "RSID_Proxy", "CHR.y", "START.y", "REF.ALLELE.y", "ALT.ALLELE.y")
   
 ## if LDproxy not used and bedfile provided, remove those without coverage. 
-}else if (LDproxy_flag == "OFF" & !is.null(bedfile)){
+}else if (LDproxy_flag == "OFF" && !is.null(bedfile)){
   message("Remove blacklisted regions enabled, but LDproxy disabled...")
   message("rsID without coverage will be removed")
 
   ## append empty columns for downstream flag adding 
   LDproxy_out <- cbind(urercov,NA,NA,NA,NA,NA)
-  colnames(LDproxy_out) <- c("rsID", "CHR.x", "START.x", "REF.ALLELE.x", "ALT.ALLELE.x", "SEQ", "strand", "ambiguous", "Risk_allele", "risk_type", "flipped", "bedcov", "RSID_Proxy", "CHR.y", "START.y", "REF.ALLELE.y", "ALT.ALLELE.y")
+  colnames(LDproxy_out) <- c("rsID", "CHR.x", "START.x", "REF.ALLELE.x", "ALT.ALLELE.x", "SEQ", "strand", "ambiguous", "effectAllele", "risk_type", "flipped", "bedcov", "RSID_Proxy", "CHR.y", "START.y", "REF.ALLELE.y", "ALT.ALLELE.y")
   
 ## do ldproxy and exlude those that fall in the bed regions  - do sub and resub
-}else if (LDproxy_flag == "ON" & !is.null(bedfile)){
+}else if (LDproxy_flag == "ON" && !is.null(bedfile)){
   
   ## only run LDproxy on unique results for those that don't have coverage or are ambigious
   run_ind <- which(urercov$bedcov == TRUE & urercov$ambiguous != "Y")
@@ -380,7 +385,7 @@ if(length(unique(urercov$bedcov)) == 1 & unique(urercov$bedcov) == FALSE){
     ## if not all results don't have coverage
     if(nrow(urercov) !=  length(run_ind)){
       nocov_padd <- cbind(urercov[-run_ind,],NA,NA,NA,NA,NA)
-      colnames(nocov_padd) <- c("rsID", "CHR.x", "START.x", "REF.ALLELE.x", "ALT.ALLELE.x", "SEQ", "strand", "ambiguous", "Risk_allele", "risk_type", "flipped", "bedcov", "RSID_Proxy", "CHR.y", "START.y", "REF.ALLELE.y", "ALT.ALLELE.y")
+      colnames(nocov_padd) <- c("rsID", "CHR.x", "START.x", "REF.ALLELE.x", "ALT.ALLELE.x", "SEQ", "strand", "ambiguous", "effectAllele", "risk_type", "flipped", "bedcov", "RSID_Proxy", "CHR.y", "START.y", "REF.ALLELE.y", "ALT.ALLELE.y")
     
       # final output
       LDproxy_out <- rbind(nocov_padd, LDproxy_in)
@@ -389,7 +394,7 @@ if(length(unique(urercov$bedcov)) == 1 & unique(urercov$bedcov) == FALSE){
     }
   }else{
     nocov_padd <- cbind(urercov,NA,NA,NA,NA,NA)
-    colnames(nocov_padd) <- c("rsID", "CHR.x", "START.x", "REF.ALLELE.x", "ALT.ALLELE.x", "SEQ", "strand", "ambiguous", "Risk_allele", "risk_type", "flipped", "bedcov", "RSID_Proxy", "CHR.y", "START.y", "REF.ALLELE.y", "ALT.ALLELE.y")
+    colnames(nocov_padd) <- c("rsID", "CHR.x", "START.x", "REF.ALLELE.x", "ALT.ALLELE.x", "SEQ", "strand", "ambiguous", "effectAllele", "risk_type", "flipped", "bedcov", "RSID_Proxy", "CHR.y", "START.y", "REF.ALLELE.y", "ALT.ALLELE.y")
     
     ## final output
     LDproxy_out <- nocov_padd
@@ -427,7 +432,7 @@ LDproxy_outlf <- cbind(LDproxy_outl, rm_flag)
 LDproxy_outlf$rm_flag[is.na(LDproxy_outlf$rm_flag)] <- "Y"
 
 ## merge with previous results
-LDproxyf <- merge(LDproxy_outlf, gf_ok[,c("rsID","Freq","Effect.size")], by="rsID")
+LDproxyf <- merge(LDproxy_outlf, gf_ok[,c("rsID","effectAlleleFrequency","weight")], by="rsID")
 
 ## change column names
 ## write this to outfile - as intermediate file
@@ -532,19 +537,20 @@ final[is.na(final[,6]),6] <- "NaN"
 ##################
 
 ## setup output file
-filen <- paste(outdir, "/", output_name2, "_NIMPRESS_input.txt", sep="")
+filen <- paste(outdir, "/", output_name2, ".score", sep="")
 
 ## title
 write(output_name2,file=filen, append=FALSE)
 ## description
-write(arguments$description,file=filen, append=TRUE)
+write(gsub("^\"", "", gsub("\"$", "", arguments$description)),file=filen, append=TRUE)
 ## citation
-write(arguments$citation,file=filen, append=TRUE)
+write(gsub("^\"", "", gsub("\"$", "", arguments$citation)),file=filen, append=TRUE)
 ## genome version
 write(gv,file=filen, append=TRUE)
 ## ofset
 write(arguments$offset,file=filen, append=TRUE)
-  
+
+final = final[order(final[,1], final[,2]),]
 write.table(final, file=filen, sep="\t", row.names = FALSE, col.names = FALSE, quote = FALSE, append=TRUE)
  
 message("Done")
